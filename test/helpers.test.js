@@ -26,6 +26,7 @@ test('describeCapture includes the annotation and selector', () => {
   }, 'capture.png');
   assert.match(markdown, /#save/);
   assert.match(markdown, /Increase the spacing/);
+  assert.match(markdown, /## My request/);
   assert.match(markdown, /^# Browser change request/);
   assert.match(markdown, /Treat the task above as the user request/);
   assert.match(markdown, /capture\.png/);

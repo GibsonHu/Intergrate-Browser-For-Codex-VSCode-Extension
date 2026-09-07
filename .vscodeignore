@@ -3,7 +3,6 @@
 .codex-browser/**
 .vsixmanifest
 test/**
-media/icons/**
 *.vsix
 package-lock.json
 npm-debug.log*

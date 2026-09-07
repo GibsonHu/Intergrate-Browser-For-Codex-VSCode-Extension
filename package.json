@@ -1,8 +1,8 @@
 {
-	"name": "Intergrate-Browser-For-Codex",
-	"displayName": "Integrated Browser for Codex",
+	"name": "browser-coms-for-codex",
+	"displayName": "Browser Coms for Codex",
 	"description": "A VS Code-native browser experience for commenting on pages and attaching the context to Codex.",
-	"version": "0.17.0",
+	"version": "1.0.3",
 	"publisher": "drgoldenpants",
 	"license": "MIT",
 	"engines": {
@@ -19,7 +19,7 @@
 		"playwright"
 	],
 	"activationEvents": [
-		"onCommand:intergrateBrowserForCodex.open"
+		"onCommand:browser-coms-for-codex.open"
 	],
 	"main": "./src/extension.js",
 	"extensionKind": [
@@ -29,40 +29,53 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "intergrateBrowserForCodex.open",
-				"title": "Open Integrated Browser for Codex",
+				"command": "browser-coms-for-codex.open",
+				"title": "Browser Coms for Codex",
 				"category": "Browser",
-				"icon": "$(globe)"
+				"icon": "media/icons/codex-browser.png"
 			}
 		],
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "intergrateBrowserForCodex.open"
+					"command": "browser-coms-for-codex.open"
+				}
+			],
+			"editor/title": [
+				{
+					"command": "browser-coms-for-codex.open",
+					"group": "navigation@100"
 				}
 			]
 		},
 		"configuration": {
-			"title": "Integrated Browser for Codex",
+			"title": "Browser Coms for Codex",
 			"properties": {
-				"intergrateBrowserForCodex.homepage": {
+				"browser-coms-for-codex.homepage": {
 					"type": "string",
 					"default": "http://localhost:3000",
-					"description": "Page opened when the browser starts."
+					"description": "Home suggestion shown when the browser has no recent pages."
 				},
-				"intergrateBrowserForCodex.refreshInterval": {
+				"browser-coms-for-codex.refreshInterval": {
 					"type": "number",
-					"default": 700,
-					"minimum": 250,
+					"default": 1000,
+					"minimum": 500,
 					"maximum": 5000,
-					"description": "Milliseconds between visual change checks."
+					"description": "Milliseconds between background visual change checks. Browser interactions still refresh immediately."
 				},
-				"intergrateBrowserForCodex.chromeExecutable": {
+				"browser-coms-for-codex.renderScale": {
+					"type": "number",
+					"default": 0,
+					"minimum": 0,
+					"maximum": 4,
+					"description": "Browser pixel density. 0 automatically matches the VS Code display; use 1–4 to override it."
+				},
+				"browser-coms-for-codex.chromeExecutable": {
 					"type": "string",
 					"default": "",
 					"description": "Optional Chrome/Chromium executable. Common system paths are detected automatically."
 				},
-				"intergrateBrowserForCodex.ignoreHttpsErrors": {
+				"browser-coms-for-codex.ignoreHttpsErrors": {
 					"type": "boolean",
 					"default": true,
 					"description": "Allow local development servers with self-signed certificates."
@@ -71,14 +84,12 @@
 		}
 	},
 	"scripts": {
-		"check": "node --check src/extension.js && node --check media/browser.js && node --check src/browser-share.js && node --check src/browser-mcp.js",
+		"check": "node --check src/extension.js && node --check media/browser.js",
 		"test": "node --test test/*.test.js",
 		"package": "npx @vscode/vsce package"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.30.0",
-		"playwright-core": "^1.55.0",
-		"zod": "^4.5.4"
+		"playwright-core": "^1.55.0"
 	},
 	"devDependencies": {
 		"@vscode/vsce": "^3.6.0"

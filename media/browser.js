@@ -3,41 +3,33 @@
 
   const vscode = acquireVsCodeApi();
   const frame = document.getElementById('frame');
-  const devtoolsFrame = document.getElementById('devtools-frame');
-  const dockSplitter = document.getElementById('dock-splitter');
   const stage = document.getElementById('stage');
   const overlay = document.getElementById('overlay');
   const address = document.getElementById('address');
   const empty = document.getElementById('empty');
   const draftBox = document.getElementById('draft');
-  const elementLabel = document.getElementById('element-label');
-  let hoverElement = null;
   const annotation = document.getElementById('annotation');
   const codexActions = document.getElementById('codex-actions');
   const addContext = document.getElementById('add-context');
-  const contextMenu = document.getElementById('context-menu');
-  const contextMenuToggle = document.getElementById('context-menu-toggle');
   const toast = document.getElementById('toast');
   const statusText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
-  const devtoolsToggle = document.getElementById('devtools-toggle');
-  const areaCapture = document.getElementById('area-capture');
-  const screenshotMenu = document.getElementById('screenshot-menu');
-  const screenshotMenuToggle = document.getElementById('screenshot-menu-toggle');
-  const shareButton = document.getElementById('share-browser');
-  const shareConfirmation = document.getElementById('share-confirmation');
-  const shareDontAsk = document.getElementById('share-dont-ask');
+  const screenshotPrimary = document.getElementById('screenshot-primary');
+  const drawPrimary = document.getElementById('draw-primary');
+  const addressSuggestions = document.getElementById('address-suggestions');
 
   const previous = vscode.getState() || {};
   let mode = previous.mode || 'browse';
-  let commentMode = previous.commentMode !== false;
   let captures = Array.isArray(previous.captures) ? previous.captures : [];
   let draft = null;
   let frameMeta = { width: 1280, height: 760, url: '', title: '' };
   let drawing = null;
+  let inkPath = null;
+  let inkPaths = [];
   let hoverRect = null;
   let inspectTimer = null;
   let resizeTimer = null;
+  let lastReportedSize = '';
   let toastTimer = null;
   let loading = false;
   let requestSequence = 0;
@@ -45,19 +37,12 @@
   let selectionRequest = null;
   let gesture = null;
   let pendingCapture = null;
-  let devtoolsActive = false;
-  let areaAfterDevtools = false;
-  let splitRatio = Math.max(.3, Math.min(.75, Number(previous.splitRatio) || .54));
-  let focusedSurface = 'page';
-  let resizingDock = false;
-  let browserSharing = false;
-  let shareConsentGranted = document.body.dataset.shareConsent === 'true';
+  let hasFrame = false;
+  let startPage = false;
+  let launcherData = { recents: [], openTabs: [] };
+  let activeSuggestion = -1;
   const reload = document.getElementById("reload");
   const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
-  document.getElementById("select-shortcut").textContent = isMac ? "⌥⌘C" : "Ctrl+Alt+C";
-  document.getElementById('element-shortcut').textContent = isMac ? '⇧⌘C' : 'Ctrl+Shift+C';
-  document.getElementById('screenshot-shortcut').textContent = isMac ? '⌥⌘S' : 'Ctrl+Alt+S';
-  document.getElementById('area-shortcut').textContent = isMac ? '⌥⌘A' : 'Ctrl+Alt+A';
   const standardShortcuts = {
     'new-tab-shortcut': ['Ctrl+T', '⌘T'],
     'zoom-in-shortcut': ['Ctrl++', '⌘+'],
@@ -68,61 +53,20 @@
     'favorite-shortcut': ['Ctrl+D', '⌘D']
   };
   for (const [id, labels] of Object.entries(standardShortcuts)) document.getElementById(id).textContent = labels[isMac ? 1 : 0];
-  address.addEventListener("focus", () => address.select());
+  address.addEventListener('focus', () => {
+    address.select();
+    post('getLauncherData');
+    if (startPage || launcherData.recents.length || launcherData.openTabs.length) showAddressSuggestions();
+  });
   document.getElementById("external").addEventListener("click", () => post("external"));
   document.getElementById("settings").addEventListener("click", () => post("settings"));
   document.getElementById('copy-url').addEventListener('click', () => post('copyUrl'));
-  function closeShareConfirmation() {
-    shareConfirmation.classList.add('hidden');
-    shareButton.setAttribute('aria-expanded', 'false');
-  }
-
-  function requestBrowserShare() {
-    if (browserSharing || shareConsentGranted) {
-      post('shareBrowser');
-      return;
-    }
-    toggleContextMenu(false);
-    closeScreenshotMenu();
-    closeMore();
-    shareDontAsk.checked = false;
-    shareConfirmation.classList.remove('hidden');
-    shareButton.setAttribute('aria-expanded', 'true');
-    document.getElementById('share-allow').focus();
-  }
-
-  shareButton.addEventListener('click', requestBrowserShare);
-  document.getElementById('share-deny').addEventListener('click', () => {
-    closeShareConfirmation();
-    shareButton.focus();
-  });
-  document.getElementById('share-allow').addEventListener('click', () => {
-    const remember = shareDontAsk.checked;
-    if (remember) shareConsentGranted = true;
-    closeShareConfirmation();
-    post('shareBrowser', { remember });
-  });
-  shareConfirmation.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeShareConfirmation();
-      shareButton.focus();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const items = [...shareConfirmation.querySelectorAll('input, button')];
-    const index = items.indexOf(document.activeElement);
-    if ((!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0)) {
-      event.preventDefault();
-      items[event.shiftKey ? items.length - 1 : 0].focus();
-    }
-  });
   const moreMenu = document.getElementById('more-menu');
   const moreToggle = document.getElementById('more-toggle');
   function closeMore() { moreMenu.classList.add('hidden'); moreToggle.setAttribute('aria-expanded', 'false'); }
   moreToggle.addEventListener('click', () => {
     const open = moreMenu.classList.contains('hidden');
-    toggleContextMenu(false); closeScreenshotMenu(); moreMenu.classList.toggle('hidden', !open); moreToggle.setAttribute('aria-expanded', String(open));
+    moreMenu.classList.toggle('hidden', !open); moreToggle.setAttribute('aria-expanded', String(open));
     if (open) moreMenu.querySelector('button').focus();
   });
   document.addEventListener('click', event => { if (!event.target.closest('.browser-more') || event.target.closest('[role=menuitem]')) closeMore(); });
@@ -130,17 +74,12 @@
     if (['ArrowDown','ArrowUp'].includes(event.key)) { event.preventDefault(); const items = [...moreMenu.querySelectorAll('button:not(:disabled)')]; items[(items.indexOf(document.activeElement) + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
   });
 
-  const modeButtons = {
-    element: document.getElementById('element-mode'),
-    select: document.getElementById('select-mode')
-  };
-
   function post(type, rest) {
     vscode.postMessage(Object.assign({ type }, rest || {}));
   }
 
   function saveState() {
-    vscode.setState({ mode, captures, commentMode, splitRatio });
+    vscode.setState({ mode, captures });
   }
 
   function setMode(next) {
@@ -149,21 +88,22 @@
     selectionRequest = null;
     gesture = null;
     mode = next;
-    for (const [name, button] of Object.entries(modeButtons)) button.classList.toggle('active', name === mode);
-    codexActions.classList.toggle('selection-active', mode !== 'browse' || !!draft);
-    addContext.setAttribute('aria-pressed', String(mode !== 'browse' || !!draft));
-    areaCapture.setAttribute('aria-checked', String(mode === 'region' || draft?.kind === 'region'));
-    modeButtons.select.setAttribute('aria-checked', String(mode === 'select'));
+    const commentActive = ['select', 'element'].includes(mode) || draft?.kind === 'element';
+    codexActions.classList.toggle('selection-active', commentActive);
+    addContext.setAttribute('aria-pressed', String(commentActive));
+    screenshotPrimary.setAttribute('aria-pressed', String(mode === 'region' || draft?.kind === 'region'));
+    drawPrimary.setAttribute('aria-pressed', String(mode === 'draw' || draft?.kind === 'drawing'));
     stage.dataset.mode = mode;
     hoverRect = null;
-    hoverElement = null;
     drawing = null;
+    inkPath = null;
+    inkPaths = [];
     renderOverlay();
     saveState();
     stage.focus();
   }
 
-  function viewportPoint(event) {
+  function pagePoint(event) {
     const rect = frame.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(frameMeta.width, (event.clientX - rect.left) * frameMeta.width / rect.width)),
@@ -171,54 +111,48 @@
     };
   }
 
-  function inputPoint(event) {
-    const useDevtools = devtoolsActive && event.clientX >= devtoolsFrame.getBoundingClientRect().left;
-    const surface = useDevtools ? devtoolsFrame : frame;
-    const meta = useDevtools ? { width: Number(devtoolsFrame.dataset.width), height: Number(devtoolsFrame.dataset.height) } : frameMeta;
-    const rect = surface.getBoundingClientRect();
-    return {
-      surface: useDevtools ? 'devtools' : 'page',
-      x: Math.max(0, Math.min(meta.width, (event.clientX - rect.left) * meta.width / rect.width)),
-      y: Math.max(0, Math.min(meta.height, (event.clientY - rect.top) * meta.height / rect.height))
-    };
+  function svgRect(rect, className) {
+    if (!rect) return '';
+    return `<rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" rx="0" class="${className}"/>`;
   }
 
-  function svgRect(rect, className, label) {
-    if (!rect) return '';
-    const title = label ? `<text x="${rect.x + 6}" y="${Math.max(14, rect.y - 5)}" class="marker-label">${escapeHtml(label)}</text>` : '';
-    return `<rect x="${rect.x}" y="${rect.y}" width="${rect.width}" height="${rect.height}" rx="0" class="${className}"/>${title}`;
+  function svgPath(points, className) {
+    if (!Array.isArray(points) || points.length < 2) return '';
+    const data = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(' ');
+    return `<path d="${data}" class="${className}"/>`;
   }
 
   function renderOverlay() {
     overlay.setAttribute('viewBox', `0 0 ${frameMeta.width} ${frameMeta.height}`);
     const items = [];
     if (['select', 'element'].includes(mode) && hoverRect && !draft) items.push(svgRect(hoverRect, 'hover-marker'));
-    if (draft) items.push(svgRect(draft.kind === 'element' ? draft.element.rect : draft.region, 'hover-marker'));
+    if (draft?.kind === 'drawing') {
+      for (const path of draft.paths || [draft.path]) items.push(svgPath(path, 'ink-path'));
+    }
+    else if (draft) items.push(svgRect(draft.kind === 'element' ? draft.element.rect : draft.region, 'hover-marker'));
     if (drawing) {
       const r = normalizeRegion(drawing.start, drawing.end);
       items.push(`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" class="draft-region"/>`);
     }
+    for (const path of inkPaths) items.push(svgPath(path, 'ink-path'));
+    if (inkPath) items.push(svgPath(inkPath, 'ink-path'));
     overlay.innerHTML = items.join('');
     positionSelection();
   }
 
   function positionSelection() {
-    const element = draft?.kind === 'element' ? draft.element : ['select', 'element'].includes(mode) ? hoverElement : null;
     const rect = draft ? (draft.kind === 'element' ? draft.element.rect : draft.region) : ['select', 'element'].includes(mode) ? hoverRect : null;
-    areaCapture.setAttribute('aria-checked', String(mode === 'region' || draft?.kind === 'region'));
+    const commentActive = ['select', 'element'].includes(mode) || draft?.kind === 'element';
+    screenshotPrimary.setAttribute('aria-pressed', String(mode === 'region' || draft?.kind === 'region'));
+    drawPrimary.setAttribute('aria-pressed', String(mode === 'draw' || draft?.kind === 'drawing'));
     stage.classList.toggle('inspecting', !!draft);
-    codexActions.classList.toggle('selection-active', mode !== 'browse' || !!draft);
-    addContext.setAttribute('aria-pressed', String(mode !== 'browse' || !!draft));
-    elementLabel.classList.toggle('hidden', !rect);
+    codexActions.classList.toggle('selection-active', commentActive);
+    addContext.setAttribute('aria-pressed', String(commentActive));
     if (!rect) return;
     const pageBounds = frame.getBoundingClientRect();
     const sx = pageBounds.width / frameMeta.width;
     const sy = pageBounds.height / frameMeta.height;
     const x = rect.x * sx, y = rect.y * sy, bottom = (rect.y + rect.height) * sy;
-    const name = element ? element.displaySelector || element.tag.toLowerCase() : 'Area';
-    elementLabel.textContent = `${name}  ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
-    elementLabel.style.left = `${Math.max(4, Math.min(x, pageBounds.width - elementLabel.offsetWidth - 4))}px`;
-    elementLabel.style.top = `${Math.max(0, y - 22)}px`;
     if (draft) {
       draftBox.style.left = `${Math.max(4, Math.min(x, pageBounds.width - draftBox.offsetWidth - 4))}px`;
       const below = bottom + 2;
@@ -251,16 +185,62 @@
     draftBox.classList.add('hidden');
     annotation.value = '';
     drawing = null;
+    inkPath = null;
+    inkPaths = [];
     renderOverlay();
   }
 
-  function commitDraft() {
+  function finishDrawing() {
+    if (mode !== 'draw' || !inkPaths.length) return;
+    const paths = inkPaths.map(path => path.slice());
+    const points = paths.flat();
+    const xs = points.map(point => point.x), ys = points.map(point => point.y);
+    const left = Math.max(0, Math.min(...xs) - 7);
+    const top = Math.max(0, Math.min(...ys) - 7);
+    const region = {
+      x: left,
+      y: top,
+      width: Math.min(frameMeta.width, Math.max(...xs) + 7) - left,
+      height: Math.min(frameMeta.height, Math.max(...ys) + 7) - top
+    };
+    setMode('browse');
+    openDraft({ kind: 'drawing', paths, region });
+  }
+
+  async function drawingScreenshot(capture) {
+    if (!frame.complete || !frame.naturalWidth) throw new Error('The browser image is not ready');
+    const canvas = document.createElement('canvas');
+    canvas.width = frameMeta.width;
+    canvas.height = frameMeta.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(frame, 0, 0, canvas.width, canvas.height);
+    context.beginPath();
+    context.strokeStyle = '#f14c4c';
+    context.lineWidth = 4;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    for (const path of capture.paths || [capture.path]) {
+      context.beginPath();
+      path.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y));
+      context.stroke();
+    }
+    return canvas.toDataURL('image/png').split(',')[1];
+  }
+
+  async function commitDraft() {
     if (!draft || pendingCapture) return;
     draft.annotation = annotation.value.trim();
     if (!draft.annotation) { annotation.focus(); return; }
     pendingCapture = draft;
+    if (draft.kind === 'drawing') {
+      try { pendingCapture.imageData = await drawingScreenshot(pendingCapture); }
+      catch (error) {
+        pendingCapture = null;
+        showToast(error.message || 'Could not create the marked-up screenshot');
+        return;
+      }
+    }
     post('sendCapture', { capture: draft });
-    showToast('Adding request to the Codex composer…');
     closeDraft();
     stage.focus();
   }
@@ -268,95 +248,6 @@
   function renderCaptures() {
     document.getElementById('capture-count').textContent = String(captures.length);
   }
-
-  function toggleDevtools(open) {
-    const shouldOpen = typeof open === 'boolean' ? open : !devtoolsActive;
-    devtoolsActive = shouldOpen;
-    applyDockLayout();
-    devtoolsToggle.setAttribute('aria-pressed', String(shouldOpen));
-    if (shouldOpen) { closeDraft(); setMode('browse'); }
-    post('devtools', { open: shouldOpen });
-  }
-
-  function applyDockLayout() {
-    stage.style.setProperty('--page-ratio', `${splitRatio * 100}%`);
-    stage.classList.toggle('devtools-split', devtoolsActive);
-    dockSplitter.classList.toggle('hidden', !devtoolsActive);
-    devtoolsFrame.classList.toggle('hidden', !devtoolsActive);
-    positionSelection();
-  }
-
-  dockSplitter.addEventListener('pointerdown', event => {
-    event.preventDefault(); event.stopPropagation(); resizingDock = true;
-    dockSplitter.setPointerCapture(event.pointerId);
-  });
-  dockSplitter.addEventListener('pointermove', event => {
-    if (!resizingDock) return;
-    const bounds = stage.getBoundingClientRect();
-    splitRatio = Math.max(.3, Math.min(.75, (event.clientX - bounds.left) / bounds.width));
-    applyDockLayout(); saveState();
-  });
-  dockSplitter.addEventListener('pointerup', event => {
-    if (!resizingDock) return;
-    resizingDock = false; dockSplitter.releasePointerCapture(event.pointerId); reportSize();
-  });
-  dockSplitter.addEventListener('keydown', event => {
-    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-    event.preventDefault();
-    splitRatio = Math.max(.3, Math.min(.75, splitRatio + (event.key === 'ArrowRight' ? .02 : -.02)));
-    applyDockLayout(); saveState(); reportSize();
-  });
-
-  function toggleContextMenu(force) {
-    const shouldOpen = typeof force === 'boolean' ? force : contextMenu.classList.contains('hidden');
-    contextMenu.classList.toggle('hidden', !shouldOpen);
-    contextMenuToggle.setAttribute('aria-expanded', String(shouldOpen));
-    if (shouldOpen) {
-      closeMore();
-      closeScreenshotMenu();
-      contextMenu.style.transform = '';
-      const bounds = contextMenu.getBoundingClientRect();
-      const shift = bounds.left < 4 ? 4 - bounds.left : bounds.right > window.innerWidth - 4 ? window.innerWidth - 4 - bounds.right : 0;
-      contextMenu.style.transform = `translateX(${shift}px)`;
-    }
-    if (shouldOpen) contextMenu.querySelector('button:not(:disabled)').focus();
-  }
-
-  function closeScreenshotMenu() {
-    screenshotMenu.classList.add('hidden');
-    screenshotMenuToggle.setAttribute('aria-expanded', 'false');
-  }
-
-  function toggleScreenshotMenu(force) {
-    const shouldOpen = typeof force === 'boolean' ? force : screenshotMenu.classList.contains('hidden');
-    screenshotMenu.classList.toggle('hidden', !shouldOpen);
-    screenshotMenuToggle.setAttribute('aria-expanded', String(shouldOpen));
-    if (shouldOpen) {
-      toggleContextMenu(false);
-      closeMore();
-      screenshotMenu.querySelector('button:not(:disabled)').focus();
-    }
-  }
-
-  screenshotMenu.addEventListener('keydown', event => {
-    const items = [...screenshotMenu.querySelectorAll('button:not(:disabled)')];
-    const index = items.indexOf(document.activeElement);
-    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-      event.preventDefault();
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items[next].focus();
-    }
-  });
-
-  contextMenu.addEventListener('keydown', event => {
-    const items = [...contextMenu.querySelectorAll('button:not(:disabled)')];
-    const index = items.indexOf(document.activeElement);
-    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-      event.preventDefault();
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items[next].focus();
-    }
-  });
 
   function showToast(message) {
     clearTimeout(toastTimer);
@@ -374,12 +265,97 @@
     return String(value == null ? '' : value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
   }
 
+  function suggestionItems() {
+    const query = address.value.trim().toLowerCase();
+    const matches = item => !query || `${item.title || ''} ${item.url || ''}`.toLowerCase().includes(query);
+    return {
+      recents: launcherData.recents.filter(matches),
+      openTabs: launcherData.openTabs.filter(matches)
+    };
+  }
+
+  function siteMark(url) {
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      if (host === 'localhost' || /^\d+(\.\d+){3}$/.test(host)) return '&#9678;';
+      return escapeHtml(host.charAt(0).toUpperCase() || '?');
+    } catch { return '&#9678;'; }
+  }
+
+  function renderSuggestionSection(title, hint, items, kind) {
+    if (!items.length) return '';
+    return `<div class="suggestion-heading"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(hint)}</span></div>${items.map((item, index) => `
+      <button type="button" class="suggestion-row" role="option" data-kind="${kind}" data-index="${index}">
+        <span class="site-mark" aria-hidden="true">${siteMark(item.url)}</span>
+        <span class="suggestion-title">${escapeHtml(item.title || item.url)}</span>
+        <span class="suggestion-url">${escapeHtml(item.url)}</span>
+      </button>`).join('')}`;
+  }
+
+  function renderAddressSuggestions() {
+    const filtered = suggestionItems();
+    addressSuggestions.innerHTML =
+      renderSuggestionSection('Recents', 'Recently visited', filtered.recents, 'recent') +
+      renderSuggestionSection('Open Tabs', 'Select a tab to switch', filtered.openTabs, 'tab') ||
+      '<div class="suggestion-empty">Type a URL or search term, then press Enter</div>';
+    const rows = [...addressSuggestions.querySelectorAll('.suggestion-row')];
+    activeSuggestion = Math.min(activeSuggestion, rows.length - 1);
+    rows.forEach((row, index) => row.classList.toggle('active', index === activeSuggestion));
+  }
+
+  function showAddressSuggestions() {
+    renderAddressSuggestions();
+    addressSuggestions.classList.remove('hidden');
+    address.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeAddressSuggestions() {
+    activeSuggestion = -1;
+    addressSuggestions.classList.add('hidden');
+    address.setAttribute('aria-expanded', 'false');
+  }
+
+  function chooseSuggestion(row) {
+    if (!row) return;
+    const filtered = suggestionItems();
+    const list = row.dataset.kind === 'tab' ? filtered.openTabs : filtered.recents;
+    const item = list[Number(row.dataset.index)];
+    if (!item) return;
+    closeAddressSuggestions();
+    if (row.dataset.kind === 'tab') post('openTab', { id: item.id });
+    else post('navigate', { url: item.url });
+  }
+
+  address.addEventListener('input', () => { activeSuggestion = -1; showAddressSuggestions(); });
+  address.addEventListener('keydown', event => {
+    const rows = [...addressSuggestions.querySelectorAll('.suggestion-row')];
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (addressSuggestions.classList.contains('hidden')) showAddressSuggestions();
+      const count = rows.length || addressSuggestions.querySelectorAll('.suggestion-row').length;
+      if (!count) return;
+      activeSuggestion = (activeSuggestion + (event.key === 'ArrowDown' ? 1 : -1) + count) % count;
+      renderAddressSuggestions();
+    } else if (event.key === 'Enter' && activeSuggestion >= 0 && !addressSuggestions.classList.contains('hidden')) {
+      event.preventDefault();
+      chooseSuggestion(addressSuggestions.querySelectorAll('.suggestion-row')[activeSuggestion]);
+    } else if (event.key === 'Escape' && !addressSuggestions.classList.contains('hidden')) {
+      event.preventDefault(); event.stopPropagation(); closeAddressSuggestions();
+    }
+  });
+  addressSuggestions.addEventListener('mousedown', event => event.preventDefault());
+  addressSuggestions.addEventListener('click', event => chooseSuggestion(event.target.closest('.suggestion-row')));
+  document.addEventListener('mousedown', event => {
+    if (!event.target.closest('#address-form, #address-suggestions')) closeAddressSuggestions();
+  });
+
   function cryptoId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   document.getElementById('address-form').addEventListener('submit', event => {
     event.preventDefault();
+    closeAddressSuggestions();
     post('navigate', { url: address.value });
     stage.focus();
   });
@@ -388,18 +364,15 @@
   document.getElementById('reload').addEventListener('click', () => post(loading ? 'stop' : 'reload'));
   addContext.addEventListener('click', () => {
     if (draft) { closeDraft(); setMode('browse'); }
-    else setMode(mode !== 'browse' ? 'browse' : commentMode ? 'select' : 'element');
+    else setMode(['select', 'element'].includes(mode) ? 'browse' : 'select');
   });
-  contextMenuToggle.addEventListener('click', event => { event.stopPropagation(); toggleContextMenu(); });
-  screenshotMenuToggle.addEventListener('click', event => { event.stopPropagation(); toggleScreenshotMenu(); });
-  modeButtons.element.addEventListener('click', () => { toggleContextMenu(false); closeDraft(); setMode('element'); });
-  modeButtons.select.addEventListener('click', () => { toggleContextMenu(false); closeDraft(); const active = mode === 'select'; commentMode = true; setMode(active ? 'browse' : 'select'); });
-  document.getElementById('console-capture').addEventListener('click', () => { toggleContextMenu(false); post('consoleCapture'); });
-  document.getElementById('screenshot-capture').addEventListener('click', () => { toggleScreenshotMenu(false); post('screenshotCapture'); });
-  areaCapture.addEventListener('click', () => {
-    toggleScreenshotMenu(false); closeMore(); closeDraft();
-    if (devtoolsActive) { areaAfterDevtools = true; toggleDevtools(false); }
-    else setMode(mode === 'region' ? 'browse' : 'region');
+  screenshotPrimary.addEventListener('click', () => {
+    closeMore(); closeDraft();
+    setMode(mode === 'region' ? 'browse' : 'region');
+  });
+  drawPrimary.addEventListener('click', () => {
+    closeMore(); closeDraft();
+    setMode(mode === 'draw' ? 'browse' : 'draw');
   });
   document.getElementById('save-draft').addEventListener('click', () => commitDraft());
   annotation.addEventListener('keydown', event => {
@@ -415,7 +388,6 @@
       else if (!event.shiftKey && event.target === add) { event.preventDefault(); annotation.focus(); }
     }
   });
-  devtoolsToggle.addEventListener('click', () => toggleDevtools());
   document.getElementById('new-tab').addEventListener('click', () => post('newTab'));
   document.getElementById('zoom-in').addEventListener('click', () => post('zoom', { action: 'in' }));
   document.getElementById('zoom-out').addEventListener('click', () => post('zoom', { action: 'out' }));
@@ -426,22 +398,17 @@
   document.getElementById('favorite').addEventListener('click', () => post('favorite'));
   document.getElementById('permissions').addEventListener('click', () => post('permissions'));
   document.getElementById('clear-storage').addEventListener('click', () => post('clearStorage'));
-  document.addEventListener('click', event => {
-    if (!codexActions.contains(event.target)) toggleContextMenu(false);
-    if (!event.target.closest('.screenshot-actions')) toggleScreenshotMenu(false);
-  });
   window.addEventListener('keydown', event => {
-    if (devtoolsActive) return;
     const modifier = isMac ? event.metaKey && event.altKey : event.ctrlKey && event.altKey;
     const commandKey = isMac ? event.metaKey : event.ctrlKey;
     if ((isMac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'c') {
       event.preventDefault(); closeDraft(); setMode('element');
     } else if (modifier && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      if (!event.repeat) { toggleContextMenu(false); toggleScreenshotMenu(false); closeMore(); post('screenshotCapture'); }
+      if (!event.repeat) { closeMore(); post('screenshotCapture'); }
     } else if (modifier && event.key.toLowerCase() === 'a') {
       event.preventDefault();
-      if (!event.repeat) { toggleContextMenu(false); toggleScreenshotMenu(false); closeMore(); closeDraft(); setMode('region'); }
+      if (!event.repeat) { closeMore(); closeDraft(); setMode('region'); }
     } else if (commandKey && !event.altKey && event.key.toLowerCase() === 't') {
       event.preventDefault(); if (!event.repeat) post('newTab');
     } else if (commandKey && !event.altKey && (event.key === '+' || event.key === '=')) {
@@ -464,15 +431,13 @@
       event.preventDefault(); post(event.key === 'ArrowLeft' ? 'back' : 'forward');
     } else if (event.key === 'Escape') {
       if (!moreMenu.classList.contains('hidden')) { closeMore(); moreToggle.focus(); }
-      else if (!screenshotMenu.classList.contains('hidden')) { closeScreenshotMenu(); screenshotMenuToggle.focus(); }
-      else if (!contextMenu.classList.contains('hidden')) { toggleContextMenu(false); contextMenuToggle.focus(); }
       else if (draft) { event.preventDefault(); closeDraft(); stage.focus(); }
       else if (mode !== 'browse') { event.preventDefault(); setMode('browse'); }
       else if (event.target === address) { address.value = frameMeta.url; stage.focus(); }
       else if (loading) post('stop');
     } else if (modifier && event.key.toLowerCase() === 'c') {
       event.preventDefault();
-      closeDraft(); const active = mode === 'select'; commentMode = true; setMode(active ? 'browse' : 'select');
+      closeDraft(); const active = mode === 'select'; setMode(active ? 'browse' : 'select');
     }
   });
 
@@ -480,26 +445,29 @@
     clearTimeout(inspectTimer);
     hoverRequest = null;
     hoverRect = null;
-    hoverElement = null;
     renderOverlay();
   }
 
-  stage.addEventListener('contextmenu', event => { if (mode !== 'browse' || draft) event.preventDefault(); });
+  stage.addEventListener('contextmenu', event => {
+    if (mode !== 'browse' || draft) event.preventDefault();
+    if (mode === 'draw' && !draft && !pendingCapture) finishDrawing();
+  });
   stage.addEventListener('pointerdown', event => {
     if (!frame.src) return;
     if (mode !== 'browse' && event.button !== 0) { event.preventDefault(); return; }
     event.preventDefault();
     stage.focus();
-    const menuOpen = !contextMenu.classList.contains('hidden') || !moreMenu.classList.contains('hidden');
-    if (menuOpen) { toggleContextMenu(false); closeMore(); gesture = null; return; }
+    if (!moreMenu.classList.contains('hidden')) { closeMore(); gesture = null; return; }
     if (pendingCapture) return;
-    const point = inputPoint(event);
-    focusedSurface = point.surface;
-    if (mode !== 'browse' && point.surface !== 'page') return;
-    gesture = { id: event.pointerId, mode, point, surface: point.surface, dismiss: !!draft };
+    const point = pagePoint(event);
+    gesture = { id: event.pointerId, mode, point, dismiss: !!draft };
     if (draft) return;
     if (mode === 'region') {
       drawing = { start: gesture.point, end: gesture.point };
+      stage.setPointerCapture(event.pointerId);
+      renderOverlay();
+    } else if (mode === 'draw') {
+      inkPath = [gesture.point];
       stage.setPointerCapture(event.pointerId);
       renderOverlay();
     }
@@ -507,11 +475,16 @@
 
   stage.addEventListener('pointermove', event => {
     if (!frame.src || draft || pendingCapture) return;
-    const point = inputPoint(event);
-    if (point.surface !== 'page' && mode !== 'browse') { clearHover(); return; }
+    const point = pagePoint(event);
     if (mode === 'region' && drawing) {
       drawing.end = point;
       renderOverlay();
+    } else if (mode === 'draw' && inkPath) {
+      const previousPoint = inkPath[inkPath.length - 1];
+      if (Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y) >= 2) {
+        inkPath.push(point);
+        renderOverlay();
+      }
     } else if (mode === 'select' || mode === 'element') {
       clearTimeout(inspectTimer);
       hoverRequest = ++requestSequence;
@@ -524,15 +497,15 @@
     clearHover();
     if (mode !== 'region') gesture = null;
   });
-  stage.addEventListener('pointercancel', () => { gesture = null; drawing = null; clearHover(); });
-  window.addEventListener('blur', () => { gesture = null; drawing = null; clearHover(); });
+  stage.addEventListener('pointercancel', () => { gesture = null; drawing = null; inkPath = null; clearHover(); });
+  window.addEventListener('blur', () => { gesture = null; drawing = null; inkPath = null; clearHover(); });
 
   stage.addEventListener('pointerup', event => {
     const started = gesture;
     gesture = null;
     if (!started || started.id !== event.pointerId || started.mode !== mode) return;
     if (started.dismiss) { closeDraft(); stage.focus(); return; }
-    const point = inputPoint(event);
+    const point = pagePoint(event);
     if (mode === 'region' && drawing) {
       const region = normalizeRegion(drawing.start, point);
       drawing = null;
@@ -541,6 +514,16 @@
         setMode('browse');
         openDraft({ kind: 'region', region, url: frameMeta.url, title: frameMeta.title });
       }
+      return;
+    }
+    if (mode === 'draw' && inkPath) {
+      inkPath.push(point);
+      const path = inkPath;
+      inkPath = null;
+      if (path.length >= 2) {
+        inkPaths.push(path);
+      }
+      renderOverlay();
       return;
     }
     if (mode !== 'region') {
@@ -556,18 +539,10 @@
     event.preventDefault();
     if (pendingCapture || draft || drawing) return;
     clearHover();
-    captures.forEach(capture => { capture.showMarker = false; });
-    post('wheel', { surface: inputPoint(event).surface, dx: event.deltaX, dy: event.deltaY });
+    post('wheel', { dx: event.deltaX, dy: event.deltaY });
   }, { passive: false });
 
   stage.addEventListener('keydown', event => {
-    if (devtoolsActive) {
-      event.preventDefault();
-      const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
-      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) post('key', { surface: focusedSurface, text: event.key });
-      else post('key', { surface: focusedSurface, key: `${event.ctrlKey ? 'Control+' : ''}${event.metaKey ? 'Meta+' : ''}${event.altKey ? 'Alt+' : ''}${event.shiftKey ? 'Shift+' : ''}${key}` });
-      return;
-    }
     if (event.key === 'Escape' || draft || pendingCapture || mode !== 'browse' || event.metaKey || event.altKey) return;
     if (event.ctrlKey && ['r', 'l'].includes(event.key.toLowerCase())) return;
     const special = { Enter: 'Enter', Backspace: 'Backspace', Delete: 'Delete', Tab: 'Tab', Escape: 'Escape', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown' };
@@ -583,20 +558,10 @@
   window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
-      case 'browserSharing': {
-        const button = shareButton;
-        browserSharing = message.active;
-        closeShareConfirmation();
-        button.setAttribute('aria-pressed', String(message.active));
-        button.title = message.active ? 'Stop Sharing Browser with Codex' : 'Share Browser with Codex';
-        button.setAttribute('aria-label', button.title);
-        break;
-      }
       case 'pageReset':
         pendingCapture = null;
         closeDraft();
         setMode('browse');
-        captures.forEach(capture => { capture.showMarker = false; });
         renderOverlay();
         break;
       case 'captureResult':
@@ -604,20 +569,16 @@
         {
           const capture = pendingCapture;
           pendingCapture = null;
-          if (message.success) { captures.push(capture); saveState(); renderCaptures(); renderOverlay(); }
+          if (message.success) { delete capture.imageData; captures.push(capture); saveState(); renderCaptures(); renderOverlay(); }
           else { openDraft(capture); showToast('Could not attach comment. Your text is preserved; try again.'); }
         }
         break;
       case 'frame':
+        startPage = false;
+        closeAddressSuggestions();
+        hasFrame = true;
         frameMeta = { width: message.width, height: message.height, url: message.url, title: message.title };
         frame.src = `data:image/jpeg;base64,${message.data}`;
-        if (message.devtoolsData) {
-          devtoolsFrame.src = `data:image/jpeg;base64,${message.devtoolsData}`;
-          devtoolsFrame.dataset.width = String(message.devtoolsWidth);
-          devtoolsFrame.dataset.height = String(message.devtoolsHeight);
-          if (Number.isFinite(message.splitRatio)) splitRatio = message.splitRatio;
-        }
-        applyDockLayout();
         if (document.activeElement !== address) address.value = message.url || address.value;
         empty.classList.add('hidden');
         setStatus('Live', 'live');
@@ -630,9 +591,27 @@
         document.getElementById('forward').disabled = !message.canGoForward;
         if (document.activeElement !== address) address.value = message.url || address.value;
         break;
+      case 'startPage':
+        startPage = true;
+        launcherData = {
+          recents: Array.isArray(message.recents) ? message.recents : [],
+          openTabs: Array.isArray(message.openTabs) ? message.openTabs : []
+        };
+        address.value = '';
+        empty.innerHTML = '';
+        empty.classList.add('hidden');
+        showAddressSuggestions();
+        setTimeout(() => address.focus(), 0);
+        break;
+      case 'launcherData':
+        launcherData = {
+          recents: Array.isArray(message.recents) ? message.recents : [],
+          openTabs: Array.isArray(message.openTabs) ? message.openTabs : []
+        };
+        if (document.activeElement === address) showAddressSuggestions();
+        break;
       case 'inspected':
         if (message.requestId !== hoverRequest || !['select', 'element'].includes(mode) || draft || pendingCapture) break;
-        hoverElement = message.element;
         hoverRect = message.element && message.element.rect;
         renderOverlay();
         break;
@@ -642,11 +621,11 @@
         if (message.element) {
           if (mode === 'element') {
             setMode('browse');
-            post('sendCapture', { capture: { kind: 'element', element: message.element, snapshotId: message.snapshotId, url: frameMeta.url, title: frameMeta.title } });
+            post('sendCapture', { capture: { kind: 'element', element: message.element, url: frameMeta.url, title: frameMeta.title } });
             break;
           }
           clearHover();
-          openDraft({ kind: 'element', element: message.element, snapshotId: message.snapshotId });
+          openDraft({ kind: 'element', element: message.element });
         }
         break;
       case 'loading':
@@ -657,18 +636,18 @@
         setStatus(message.value ? 'Loading…' : 'Live', message.value ? 'loading' : 'live');
         break;
       case 'ready': setStatus('Live', 'live'); reportSize(); break;
-      case 'error': showToast(message.message); setStatus('Page error', 'error'); break;
+      case 'error':
+        setStatus('Page error', 'error');
+        if (!hasFrame) {
+          empty.innerHTML = `<div class="fatal"><strong>Page could not load</strong><p>${escapeHtml(message.message)}</p></div>`;
+          empty.classList.remove('hidden');
+        }
+        break;
       case 'fatal':
         empty.innerHTML = `<div class="fatal"><strong>Browser could not start</strong><p>${escapeHtml(message.message)}</p><code>npm install</code></div>`;
         setStatus('Setup required', 'error');
         break;
       case 'toast': showToast(message.message); break;
-      case 'devtoolsVisibility':
-        devtoolsActive = !!message.open;
-        devtoolsToggle.setAttribute('aria-pressed', String(devtoolsActive));
-        applyDockLayout();
-        if (!devtoolsActive && areaAfterDevtools) { areaAfterDevtools = false; setMode('region'); }
-        break;
     }
   });
 
@@ -677,10 +656,16 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const rect = stage.getBoundingClientRect();
-      post('resize', { width: Math.floor(rect.width), height: Math.floor(rect.height), splitRatio });
-    }, 120);
+      const width = Math.floor(rect.width), height = Math.floor(rect.height);
+      const pixelRatio = Math.max(1, Math.min(4, Number(window.devicePixelRatio) || 1));
+      const signature = `${width}:${height}:${pixelRatio}`;
+      if (signature === lastReportedSize) return;
+      lastReportedSize = signature;
+      post('resize', { width, height, pixelRatio });
+    }, 80);
   }
   new ResizeObserver(reportSize).observe(stage);
+  window.addEventListener('resize', reportSize);
 
   setMode(mode);
   renderCaptures();

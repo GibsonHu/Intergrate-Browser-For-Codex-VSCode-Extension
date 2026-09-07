@@ -84,11 +84,11 @@ function describeCapture(capture, imageName) {
     annotation ? '# Browser change request' : '# Browser context',
     '',
     ...(annotation ? [
-      '## Task',
+      '## My request',
       '',
       annotation,
       '',
-      'Implement this change in the current workspace. Use the target details and screenshot below to locate the relevant UI, make the requested change, and verify the result.',
+      'Use the target details below to locate the referenced UI, then carry out my request in the current workspace and verify the result.',
       ''
     ] : []),
     '## Page context',

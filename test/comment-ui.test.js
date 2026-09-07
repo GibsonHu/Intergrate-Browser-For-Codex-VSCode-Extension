@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 let browser;
 test.before(async () => { browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] }); });
 test.after(async () => { await browser?.close(); });
-async function setup(t) {
+async function setup(t, { sendFrame = true } = {}) {
   const page = await browser.newPage({viewport:{width:800,height:632}});
   t.after(()=>page.close());
   const errors=[]; page.on('pageerror', e=>errors.push(e.message));
@@ -19,7 +19,7 @@ async function setup(t) {
   html=html.replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,'').replace('${style}','http://test.local/media/browser.css').replace('${script}','http://test.local/media/browser.js');
   await page.route('http://test.local/**', route=>{ const name=new URL(route.request().url()).pathname; return route.fulfill({contentType:name.endsWith('.css')?'text/css':name.endsWith('.js')?'text/javascript':'text/html',body:name==='/'?html:fs.readFileSync(path.join(root,name))}); });
   await page.goto('http://test.local/');
-  await page.evaluate(()=>window.postMessage({type:'frame',width:800,height:600,url:'http://fixture.local/',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='},'*'));
+  if (sendFrame) await page.evaluate(()=>window.postMessage({type:'frame',width:800,height:600,url:'http://fixture.local/',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='},'*'));
   await page.locator('#add-context').click();
   return page;
 }
@@ -31,40 +31,44 @@ async function pick(page,x=100,y=100) {
   await page.locator('#annotation').waitFor({state:'visible'});
   return request;
 }
-test('address bar shares the browser and reflects host sharing state', async t => {
+test('address bar has no browser sharing control and Copy Address remains available', async t => {
   const page = await setup(t);
-  await page.getByRole('button', { name: 'Share Browser with Codex', exact: true }).click();
-  const confirmation = page.getByRole('dialog', { name: 'Share this browser page with the agent?' });
-  await confirmation.waitFor();
-  assert.equal(await page.evaluate(() => messages.filter(m => m.type === 'shareBrowser').length), 0);
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  assert.equal(await page.evaluate(() => messages.filter(m => m.type === 'shareBrowser').length), 1);
-  await page.evaluate(() => window.postMessage({ type: 'browserSharing', active: true }, '*'));
-  const stop = page.getByRole('button', { name: 'Stop Sharing Browser with Codex', exact: true });
-  await stop.waitFor();
-  assert.equal(await stop.getAttribute('aria-pressed'), 'true');
-  await stop.click();
-  assert.equal(await page.evaluate(() => messages.filter(m => m.type === 'shareBrowser').length), 2);
+  assert.equal(await page.locator('#share-browser, #share-confirmation').count(), 0);
   await page.locator('#more-toggle').click();
   await page.getByRole('menuitem', { name: 'Copy Address', exact: true }).click();
   assert.equal(await page.evaluate(() => messages.filter(m => m.type === 'copyUrl').length), 1);
 });
-
-test("share confirmation can be denied and remembers an allowed Don't ask again choice", async t => {
+test('new browser shows recent pages and open tabs in the address dropdown', async t => {
   const page = await setup(t);
-  const share = page.getByRole('button', { name: 'Share Browser with Codex', exact: true });
-  await share.click();
-  await page.getByRole('button', { name: 'Deny', exact: true }).click();
-  assert.equal(await page.getByRole('dialog').isVisible(), false);
-  assert.equal(await page.evaluate(() => messages.some(m => m.type === 'shareBrowser')), false);
-  await share.click();
-  await page.getByRole('checkbox', { name: "Don't ask again" }).check();
-  await page.getByRole('button', { name: 'Allow', exact: true }).click();
-  assert.deepEqual(await page.evaluate(() => messages.filter(m => m.type === 'shareBrowser').at(-1)), { type: 'shareBrowser', remember: true });
-  await page.evaluate(() => window.postMessage({ type: 'browserSharing', active: false }, '*'));
-  await share.click();
-  assert.equal(await page.getByRole('dialog').isVisible(), false);
-  assert.deepEqual(await page.evaluate(() => messages.filter(m => m.type === 'shareBrowser').at(-1)), { type: 'shareBrowser' });
+  await page.evaluate(() => window.postMessage({
+    type: 'startPage',
+    recents: [{ title: 'Google', url: 'https://www.google.com/' }, { title: 'ARDY Streaming Control', url: 'http://localhost:2333/' }],
+    openTabs: [{ id: 'tab-1', title: 'Azure DevOps Services', url: 'https://dev.azure.com/' }]
+  }, '*'));
+  await page.locator('#address-suggestions').waitFor({ state: 'visible' });
+  assert.deepEqual(await page.locator('.suggestion-heading strong').allTextContents(), ['Recents', 'Open Tabs']);
+  assert.deepEqual(await page.locator('.suggestion-title').allTextContents(), ['Google', 'ARDY Streaming Control', 'Azure DevOps Services']);
+  assert.equal(await page.locator('#address').getAttribute('aria-expanded'), 'true');
+
+  await page.getByRole('option', { name: /Google/ }).click();
+  assert.equal(await page.evaluate(() => messages.some(message => message.type === 'navigate' && message.url === 'https://www.google.com/')), true);
+  assert.equal(await page.locator('#address-suggestions').isVisible(), false);
+});
+
+test('address dropdown filters, supports keyboard selection, and switches open tabs', async t => {
+  const page = await setup(t);
+  await page.evaluate(() => window.postMessage({
+    type: 'startPage',
+    recents: [{ title: 'Google', url: 'https://www.google.com/' }],
+    openTabs: [{ id: 'tab-azure', title: 'Azure DevOps Services', url: 'https://dev.azure.com/' }]
+  }, '*'));
+  await page.locator('#address-suggestions').waitFor({ state: 'visible' });
+  await page.locator('#address').fill('azure');
+  assert.equal(await page.locator('#address').inputValue(), 'azure');
+  assert.deepEqual(await page.locator('.suggestion-title').allTextContents(), ['Azure DevOps Services']);
+  await page.locator('#address').press('ArrowDown');
+  await page.locator('#address').press('Enter');
+  assert.equal(await page.evaluate(() => messages.some(message => message.type === 'openTab' && message.id === 'tab-azure')), true);
 });
 test('outside click dismisses only the draft; next click selects another element',async t=>{
   const page=await setup(t); await pick(page); await page.locator('#annotation').fill('draft');
@@ -81,7 +85,7 @@ test('Escape dismisses draft first, then exits selection; never forwards Escape 
   assert.equal(await page.locator('#stage').getAttribute('data-mode'),'select');
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#stage').getAttribute('data-mode'),'browse');
-  assert.equal(await page.locator('#select-mode').getAttribute('aria-checked'),'false');
+  assert.equal(await page.locator('#add-context').getAttribute('aria-pressed'),'false');
   assert.equal(await page.evaluate(()=>messages.some(m=>m.type==='key' && m.key==='Escape')),false);
 });
 test('late selection response after cancellation cannot reopen the composer',async t=>{
@@ -96,6 +100,7 @@ test('submitting keeps selection active and failure restores the comment for ret
   const page=await setup(t); await pick(page); await page.locator('#annotation').fill('Keep my feedback');
   await page.locator('#save-draft').click();
   assert.equal(await page.locator('#stage').getAttribute('data-mode'),'select');
+  assert.equal(await page.locator('#toast').evaluate(element=>element.classList.contains('visible')),false);
   const capture=await page.evaluate(()=>messages.find(m=>m.type==='sendCapture').capture);
   await page.evaluate(id=>window.postMessage({type:'captureResult',id,success:false},'*'),capture.id);
   await page.locator('#annotation').waitFor({state:'visible'});
@@ -108,6 +113,13 @@ test('submitting keeps selection active and failure restores the comment for ret
   assert.equal(await page.locator('#draft').isVisible(),false);
   assert.equal(await page.locator('.saved-marker, .saved-region, .marker-label').count(),0);
   await pick(page,450,300);
+});
+test('an initial page error is shown in the browser instead of as a popup',async t=>{
+  const page=await setup(t,{sendFrame:false});
+  await page.evaluate(()=>window.postMessage({type:'error',message:'net::ERR_CONNECTION_REFUSED'},'*'));
+  await page.locator('#empty .fatal').waitFor({state:'visible'});
+  assert.equal(await page.locator('#empty strong').textContent(),'Page could not load');
+  assert.equal(await page.locator('#toast').evaluate(element=>element.classList.contains('visible')),false);
 });
 test('composer traps Tab, does not submit IME Enter, and click inside preserves draft',async t=>{
   const page=await setup(t); await pick(page); await page.locator('#annotation').fill('Text');
@@ -124,7 +136,7 @@ test('scroll works while selecting; leaving viewport clears the hover',async t=>
   const req=await page.evaluate(()=>messages.filter(m=>m.type==='inspect').at(-1));
   await page.evaluate(requestId=>window.postMessage({type:'inspected',requestId,element:{tag:'DIV',rect:{x:20,y:20,width:100,height:20}}},'*'),req.requestId);
   await page.mouse.move(10,10); await page.waitForTimeout(20);
-  assert.equal(await page.locator('#element-label').isVisible(),false);
+  assert.equal(await page.locator('#element-label').count(), 0);
   await page.mouse.move(100,100); await page.mouse.wheel(0,150);
   assert(await page.evaluate(()=>messages.some(m=>m.type==='wheel')));
 });
@@ -136,9 +148,8 @@ test('navigation cancels stale drafts and responses',async t=>{
 
 test('area screenshot button uses a rectangle and opens an anchored comment', async t => {
   const page = await setup(t);
-  await page.locator('#screenshot-menu-toggle').click();
-  await page.locator('#area-capture').click();
-  assert.equal(await page.locator('#area-capture').getAttribute('aria-checked'), 'true');
+  await page.locator('#screenshot-primary').click();
+  assert.equal(await page.locator('#screenshot-primary').getAttribute('aria-pressed'), 'true');
   await page.mouse.move(100, 100);
   await page.mouse.down();
   await page.mouse.move(260, 220);
@@ -154,10 +165,69 @@ test('area screenshot button uses a rectangle and opens an anchored comment', as
   assert.equal(capture.annotation, 'Increase the spacing in this area');
 });
 
+test('pencil supports multiple left-button strokes and opens its comment on right-click', async t => {
+  const page = await setup(t);
+  await page.waitForFunction(() => document.getElementById('frame').naturalWidth > 0);
+  await page.locator('#draw-primary').click();
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'draw');
+  assert.equal(await page.locator('#draw-primary').getAttribute('aria-pressed'), 'true');
+
+  await page.mouse.move(120, 120);
+  await page.mouse.down();
+  await page.mouse.move(180, 155);
+  await page.mouse.move(250, 130);
+  await page.mouse.up();
+
+  assert.equal(await page.locator('#annotation').isVisible(), false);
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'draw');
+  assert.equal(await page.locator('#overlay path.ink-path').count(), 1);
+
+  await page.mouse.move(300, 180);
+  await page.mouse.down();
+  await page.mouse.move(360, 220);
+  await page.mouse.up();
+
+  assert.equal(await page.locator('#annotation').isVisible(), false);
+  assert.equal(await page.locator('#overlay path.ink-path').count(), 2);
+  await page.mouse.click(380, 240, { button: 'right' });
+
+  await page.locator('#annotation').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'browse');
+  assert.equal(await page.locator('#overlay path.ink-path').count(), 2);
+  await page.locator('#annotation').fill('Move this content lower');
+  await page.keyboard.press('Enter');
+  const capture = await page.evaluate(() => messages.find(message => message.type === 'sendCapture' && message.capture.kind === 'drawing').capture);
+  assert.equal(capture.annotation, 'Move this content lower');
+  assert.match(capture.imageData, /^iVBOR/);
+  assert.equal(capture.paths.length, 2);
+  assert(capture.paths.every(path => path.length >= 2));
+});
+
+test('screenshot area and comment element controls switch modes visibly', async t => {
+  const page = await setup(t);
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'select');
+  assert.equal(await page.locator('#add-context').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#screenshot-primary').getAttribute('aria-pressed'), 'false');
+
+  await page.locator('#screenshot-primary').click();
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'region');
+  assert.equal(await page.locator('#add-context').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#screenshot-primary').getAttribute('aria-pressed'), 'true');
+
+  await page.locator('#add-context').click();
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'select');
+  assert.equal(await page.locator('#add-context').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#screenshot-primary').getAttribute('aria-pressed'), 'false');
+});
+
 test('screenshot shortcuts send the viewport or enter rectangular area mode', async t => {
   const page = await setup(t);
-  assert.equal(await page.locator('#screenshot-shortcut').textContent(), 'Ctrl+Alt+S');
-  assert.equal(await page.locator('#area-shortcut').textContent(), 'Ctrl+Alt+A');
+  assert.equal(await page.locator('#context-menu-toggle, #context-menu, #screenshot-menu-toggle, #screenshot-menu').count(), 0);
+  await page.locator('#screenshot-primary').click();
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'region');
+  assert.equal(await page.evaluate(() => messages.filter(message => message.type === 'screenshotCapture').length), 0);
+  await page.locator('#screenshot-primary').click();
+  assert.equal(await page.locator('#stage').getAttribute('data-mode'), 'browse');
 
   await page.keyboard.press('Control+Alt+S');
   assert.equal(await page.evaluate(() => messages.filter(message => message.type === 'screenshotCapture').length), 1);
@@ -172,13 +242,9 @@ test('screenshot shortcuts send the viewport or enter rectangular area mode', as
   assert.equal(await page.locator('#annotation').isVisible(), true);
 });
 
-test('native-style browser menu and Chromium developer tools toggle are wired', async t => {
+test('overflow menu remains while icon dropdown menus, developer tools, and sharing are absent', async t => {
   const page = await setup(t);
-  await page.locator('#context-menu-toggle').click();
-  assert.deepEqual(await page.locator('#context-menu [role^="menuitem"]').allTextContents(), [
-    'Add Element to ChatCtrl+Shift+C', 'Comment on ElementsCtrl+Alt+C',
-    'Add Console Logs to Chat'
-  ]);
+  assert.equal(await page.locator('#context-menu-toggle, #context-menu, #screenshot-menu-toggle, #screenshot-menu').count(), 0);
   await page.locator('#more-toggle').click();
   assert.deepEqual(await page.locator('#more-menu [role="menuitem"]').allTextContents(), [
     'New TabCtrl+T', 'Zoom InCtrl++', 'Zoom OutCtrl+-', 'Reset ZoomCtrl+0', 'Find in PageCtrl+F',
@@ -188,23 +254,8 @@ test('native-style browser menu and Chromium developer tools toggle are wired', 
   await page.locator('#zoom-in').click();
   assert.equal(await page.evaluate(() => messages.some(message => message.type === 'zoom' && message.action === 'in')), true);
 
-  await page.locator('#devtools-toggle').click();
-  assert.equal(await page.locator('#devtools-toggle').getAttribute('aria-pressed'), 'true');
-  assert.equal(await page.evaluate(() => messages.some(message => message.type === 'devtools' && message.open)), true);
-  assert.equal(await page.locator('#stage').evaluate(element => element.classList.contains('devtools-split')), true);
-  assert.equal(await page.locator('#dock-splitter').isVisible(), true);
-  await page.evaluate(() => window.postMessage({
-    type: 'frame', width: 432, height: 600, devtoolsWidth: 364, devtoolsHeight: 600, splitRatio: .54,
-    url: 'http://fixture.local/', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
-    devtoolsData: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
-  }, '*'));
-  await page.mouse.click(700, 300);
-  assert.equal(await page.evaluate(() => messages.filter(message => message.type === 'click').at(-1).surface), 'devtools');
-  await page.mouse.click(200, 300);
-  assert.equal(await page.evaluate(() => messages.filter(message => message.type === 'click').at(-1).surface), 'page');
-  await page.evaluate(() => window.postMessage({ type: 'devtoolsVisibility', open: false }, '*'));
-  await page.waitForFunction(() => document.getElementById('devtools-toggle').getAttribute('aria-pressed') === 'false');
-  assert.equal(await page.locator('#devtools-toggle').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#devtools-toggle, #devtools-frame, #dock-splitter, #share-browser').count(), 0);
+  assert.equal(await page.evaluate(() => messages.some(message => ['devtools', 'shareBrowser'].includes(message.type))), false);
 });
 
 
@@ -216,7 +267,7 @@ test('rapid selections accept only the latest response and right-click never sel
     await page.evaluate(request=>window.postMessage({type:'selected',requestId:request.requestId,element:{tag:'DIV',selector:String(request.x),displaySelector:String(request.x),rect:{x:10,y:10,width:20,height:20}}},'*'),request);
   }
   await page.waitForTimeout(20);
-  assert.match(await page.locator('#element-label').textContent(),/450/);
+  assert.equal(await page.locator('#element-label').count(), 0);
   await page.keyboard.press('Escape');
   const count=await page.evaluate(()=>messages.filter(m=>m.type==='click').length);
   await page.mouse.click(200,200,{button:'right'});
@@ -233,7 +284,7 @@ test('actual Chromium inspection and attachment round trip supports consecutive 
   vm.runInNewContext(fs.readFileSync(filename,'utf8')+'\nmodule.exports.Panel=LiveBrowserPanel;',context);
   const panel=Object.create(context.module.exports.Panel.prototype);
   const attached=[];
-  Object.assign(panel,{page:target,viewport:{width:800,height:600},selectionSnapshots:new Map(),post:message=>page.evaluate(message=>window.postMessage(message,'*'),message),sendCaptures:async captures=>{attached.push(...captures); return true;}});
+  Object.assign(panel,{page:target,viewport:{width:800,height:600},post:message=>page.evaluate(message=>window.postMessage(message,'*'),message),sendCaptures:async captures=>{attached.push(...captures); return true;}});
   await page.exposeFunction('hostMessage', async message=>{ if (['click','inspect','sendCapture'].includes(message.type)) await panel.onMessage(message); });
   for (const [x,y,selector] of [[100,97,'#one'],[400,297,'#two']]) {
     await page.mouse.click(x,y);
@@ -242,20 +293,20 @@ test('actual Chromium inspection and attachment round trip supports consecutive 
     await page.locator('#save-draft').click();
     await page.waitForFunction(()=>document.getElementById('capture-count').textContent===String(window.messages.filter(m=>m.type==='sendCapture').length));
     assert.equal(attached.at(-1).element.selector,selector);
-    assert(panel.selectionSnapshots.get(attached.at(-1).snapshotId).length>100);
+    assert.equal(attached.at(-1).snapshotId, undefined);
   }
   await page.mouse.move(100,97); await page.mouse.down(); await page.mouse.move(400,297); await page.mouse.up();
   await page.locator('#annotation').waitFor({state:'visible'});
-  assert.match(await page.locator('#element-label').textContent(), /body/);
+  assert.equal(await page.locator('#element-label').count(), 0);
   await page.keyboard.press('Escape');
   assert.equal(await target.evaluate(()=>!!window.clicked),false);
   assert.equal(await page.locator('#stage').getAttribute('data-mode'),'select');
 });
 
 
-test('dismissing the dropdown consumes the page click and double submit attaches only once',async t=>{
+test('dismissing the overflow menu consumes the page click and double submit attaches only once',async t=>{
   const page=await setup(t);
-  await page.locator('#context-menu-toggle').click();
+  await page.locator('#more-toggle').click();
   await page.mouse.click(450,300);
   assert.equal(await page.evaluate(()=>messages.filter(m=>m.type==='click').length),0);
   await pick(page); await page.locator('#annotation').fill('Once only');
