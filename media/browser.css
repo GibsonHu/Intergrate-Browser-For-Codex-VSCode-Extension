@@ -1,0 +1,241 @@
+:root {
+  color-scheme: light dark;
+  --browser-bg: var(--vscode-editor-background, #1f1f1f);
+  --toolbar-bg: var(--vscode-editorGroupHeader-tabsBackground, #181818);
+  --control-bg: var(--vscode-input-background, #181818);
+  --control-hover: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, .31));
+  --border: var(--vscode-widget-border, #454545);
+  --text: var(--vscode-foreground, #cccccc);
+  --muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --focus: var(--vscode-focusBorder, #007fd4);
+  --button: var(--vscode-button-background, #0e639c);
+  --button-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --menu: var(--vscode-menu-background, #252526);
+  --menu-hover: var(--vscode-menu-selectionBackground, #04395e);
+  --shadow: var(--vscode-widget-shadow, rgba(0, 0, 0, .36));
+}
+
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body {
+  display: grid;
+  grid-template-rows: 32px minmax(0, 1fr);
+  color: var(--text);
+  background: var(--browser-bg);
+  font: 13px/1.4 var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+}
+button, input, textarea { font: inherit; }
+button { color: var(--text); cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+.hidden { display: none !important; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 3px 5px;
+  background: var(--browser-bg);
+}
+.nav-group { display: flex; align-items: center; gap: 4px; }
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--vscode-cornerRadius-small, 4px);
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+}
+.icon-button:hover { background: var(--control-hover); }
+.icon-button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+
+#address-form { min-width: 60px; flex: 1; margin: 0; }
+#address {
+  width: 100%;
+  height: 27px;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 4px;
+  outline: none;
+}
+#address:hover { border-color: var(--border); }
+#address:focus { border-color: var(--focus); }
+
+.codex-actions, .screenshot-actions { position: relative; display: flex; align-items: center; height: 22px; }
+.codex-actions > button { height: 22px; border: 0; background: transparent; }
+#add-context { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 5px 0 0 5px; }
+#context-menu-toggle { display: grid; place-items: center; width: 20px; padding: 0; border-left: 1px solid var(--border); border-radius: 0 5px 5px 0; }
+.codex-actions > button:hover, .codex-actions.selection-active > button { background: var(--control-hover); }
+.codex-mark { color: var(--vscode-textLink-foreground, #4daafc); font-size: 15px; }
+
+.context-menu {
+  position: absolute;
+  z-index: 20;
+  top: 27px;
+  right: 0;
+  width: 248px;
+  padding: 5px;
+  background: var(--menu);
+  border: 1px solid var(--border);
+  border-radius: var(--vscode-cornerRadius-small, 4px);
+  box-shadow: 0 8px 28px var(--shadow);
+}
+.context-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  text-align: left;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+}
+.context-menu button:hover, .context-menu button:focus-visible { color: var(--vscode-menu-selectionForeground, #fff); background: var(--menu-hover); outline: none; }
+.context-menu button:disabled { background: transparent; }
+.context-menu .shortcut { color: var(--muted); font-size: 11px; }
+.menu-separator { height: 1px; margin: 4px 7px; background: var(--vscode-menu-separatorBackground, var(--border)); }
+
+main { position: relative; min-width: 0; min-height: 0; }
+#stage { position: absolute; inset: 0; min-width: 0; min-height: 0; overflow: hidden; background: var(--browser-bg); outline: none; user-select: none; }
+#stage[data-mode="select"], #stage[data-mode="region"] { cursor: crosshair; }
+#frame, #devtools-frame, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+#stage.devtools-split #frame, #stage.devtools-split #overlay { right: auto; width: var(--page-ratio, 54%); }
+#stage.devtools-split #devtools-frame { right: 0; left: auto; width: calc(100% - var(--page-ratio, 54%) - 4px); }
+.dock-splitter { position: absolute; z-index: 18; top: 0; bottom: 0; left: var(--page-ratio, 54%); width: 4px; cursor: col-resize; background: var(--vscode-panel-border, var(--border)); transform: translateX(0); }
+.dock-splitter:hover, .dock-splitter:focus { background: var(--focus); outline: none; }
+#empty {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  color: var(--muted);
+  background: var(--browser-bg);
+}
+.spinner { width: 22px; height: 22px; border: 2px solid var(--border); border-top-color: var(--focus); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.fatal { max-width: 480px; padding: 24px; text-align: center; }
+.fatal strong { display: block; color: var(--text); font-size: 15px; }
+.fatal p { word-break: break-word; }
+.fatal code { display: inline-block; padding: 4px 8px; background: var(--control-bg); border-radius: 3px; }
+
+.hover-marker { fill: rgba(0, 122, 204, .12); stroke: var(--focus); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.draft-region { fill: rgba(0, 122, 204, .08); stroke: var(--focus); stroke-width: 2; stroke-dasharray: 7 4; vector-effect: non-scaling-stroke; }
+.marker-label { fill: #fff; stroke: #111; stroke-width: 3; paint-order: stroke; font: 600 12px var(--vscode-font-family, sans-serif); }
+
+#status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+#toast {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: 18px;
+  padding: 7px 11px;
+  color: var(--vscode-notifications-foreground, var(--text));
+  background: var(--vscode-notifications-background, var(--menu));
+  border: 1px solid var(--vscode-notifications-border, var(--border));
+  border-radius: 3px;
+  box-shadow: 0 6px 20px var(--shadow);
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  pointer-events: none;
+  transition: .12s ease;
+}
+#toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Dimensions and theme tokens follow VS Code browserView (MIT; see THIRD_PARTY_NOTICES.md). */
+.icon { display: inline-block; width: 16px; height: 16px; flex-shrink: 0; background: currentColor; mask: var(--icon) center / 16px 16px no-repeat; }
+.icon.arrow-left { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M13.5%208.00023H3.70701L7.85301%203.85423C8.04801%203.65923%208.04801%203.34223%207.85301%203.14723C7.65801%202.95223%207.34101%202.95223%207.14601%203.14723L2.14601%208.14723C1.95101%208.34223%201.95101%208.65923%202.14601%208.85423L7.14601%2013.8542C7.24401%2013.9522%207.37201%2014.0002%207.50001%2014.0002C7.62801%2014.0002%207.75601%2013.9512%207.85401%2013.8542C8.04901%2013.6592%208.04901%2013.3422%207.85401%2013.1472L3.70801%209.00123H13.501C13.777%209.00123%2014.001%208.77723%2014.001%208.50123C14.001%208.22523%2013.777%208.00123%2013.501%208.00123L13.5%208.00023Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.arrow-right { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M13.854%208.14576L8.854%203.14576C8.659%202.95076%208.342%202.95076%208.147%203.14576C7.952%203.34076%207.952%203.65776%208.147%203.85276L12.293%207.99876H2.5C2.224%207.99876%202%208.22276%202%208.49876C2%208.77476%202.224%208.99876%202.5%208.99876H12.293L8.147%2013.1448C7.952%2013.3398%207.952%2013.6568%208.147%2013.8518C8.245%2013.9498%208.373%2013.9978%208.501%2013.9978C8.629%2013.9978%208.757%2013.9488%208.855%2013.8518L13.855%208.85176C14.05%208.65676%2014.05%208.33976%2013.855%208.14476L13.854%208.14576Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.refresh { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M3%208C3%205.23858%205.23858%203%208%203C9.63527%203%2011.0878%203.78495%2012.0005%205H10C9.72386%205%209.5%205.22386%209.5%205.5C9.5%205.77614%209.72386%206%2010%206H12.8904C12.8973%206.00014%2012.9041%206.00014%2012.911%206H13C13.2761%206%2013.5%205.77614%2013.5%205.5V2.5C13.5%202.22386%2013.2761%202%2013%202C12.7239%202%2012.5%202.22386%2012.5%202.5V4.03138C11.4009%202.78613%209.79253%202%208%202C4.68629%202%202%204.68629%202%208C2%2011.3137%204.68629%2014%208%2014C11.1301%2014%2013.6999%2011.6035%2013.9756%208.54488C14.0003%208.26985%2013.7975%208.0268%2013.5225%208.00202C13.2474%207.97723%2013.0044%208.1801%2012.9796%208.45512C12.75%2011.003%2010.6079%2013%208%2013C5.23858%2013%203%2010.7614%203%208Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.close { --icon: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M13.85%2013.1502C14.05%2013.3502%2014.05%2013.6602%2013.85%2013.8602C13.75%2013.9602%2013.62%2014.0102%2013.5%2014.0102C13.38%2014.0102%2013.24%2013.9602%2013.15%2013.8602L8%208.71023L2.85%2013.8602C2.75%2013.9602%202.62%2014.0102%202.5%2014.0102C2.38%2014.0102%202.24%2013.9602%202.15%2013.8602C1.95%2013.6602%201.95%2013.3502%202.15%2013.1502L7.3%208.00023L2.15%202.85023C1.95%202.65023%201.95%202.34023%202.15%202.14023C2.35%201.94023%202.66%201.94023%202.86%202.14023L8.01%207.29023L13.16%202.14023C13.36%201.94023%2013.67%201.94023%2013.87%202.14023C14.07%202.34023%2014.07%202.65023%2013.87%202.85023L8.72%208.00023L13.87%2013.1502H13.85Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.chevron-down { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M3.14598%205.85423L7.64598%2010.3542C7.84098%2010.5492%208.15798%2010.5492%208.35298%2010.3542L12.853%205.85423C13.048%205.65923%2013.048%205.34223%2012.853%205.14723C12.658%204.95223%2012.341%204.95223%2012.146%205.14723L7.99998%209.29323L3.85398%205.14723C3.65898%204.95223%203.34198%204.95223%203.14698%205.14723C2.95198%205.34223%202.95098%205.65923%203.14598%205.85423Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.comment { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M1%204.5C1%203.11929%202.11929%202%203.5%202H12.5C13.8807%202%2015%203.11929%2015%204.5V9.5C15%2010.8807%2013.8807%2012%2012.5%2012H8.68787L5.62533%2014.6797C4.99168%2015.2342%204%2014.7842%204%2013.9422V12H3.5C2.11929%2012%201%2010.8807%201%209.5V4.5ZM3.5%203C2.67157%203%202%203.67157%202%204.5V9.5C2%2010.3284%202.67157%2011%203.5%2011H5V13.8981L8.31213%2011H12.5C13.3284%2011%2014%2010.3284%2014%209.5V4.5C14%203.67157%2013.3284%203%2012.5%203H3.5Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.link-external { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M15%209.5V12.5C15%2013.879%2013.879%2015%2012.5%2015H3.5C2.121%2015%201%2013.879%201%2012.5V3.5C1%202.121%202.121%201%203.5%201H6.5C6.776%201%207%201.224%207%201.5C7%201.776%206.776%202%206.5%202H3.5C2.673%202%202%202.673%202%203.5V12.5C2%2013.327%202.673%2014%203.5%2014H12.5C13.327%2014%2014%2013.327%2014%2012.5V9.5C14%209.224%2014.224%209%2014.5%209C14.776%209%2015%209.224%2015%209.5ZM14.5%201H9.5C9.224%201%209%201.224%209%201.5C9%201.776%209.224%202%209.5%202H13.293L9.147%206.146C8.952%206.341%208.952%206.658%209.147%206.853C9.245%206.951%209.373%206.999%209.501%206.999C9.629%206.999%209.757%206.95%209.855%206.853L14.001%202.707V6.5C14.001%206.776%2014.225%207%2014.501%207C14.777%207%2015.001%206.776%2015.001%206.5V1.5C15.001%201.224%2014.777%201%2014.501%201H14.5Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.settings-gear { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M12%209C10.3425%209%209.00002%2010.3425%209.00002%2012C9.00002%2013.6575%2010.3425%2015%2012%2015C13.6575%2015%2015%2013.6575%2015%2012C15%2010.3425%2013.6575%209%2012%209ZM12%2013.5C11.172%2013.5%2010.5%2012.828%2010.5%2012C10.5%2011.172%2011.172%2010.5%2012%2010.5C12.828%2010.5%2013.5%2011.172%2013.5%2012C13.5%2012.828%2012.828%2013.5%2012%2013.5ZM21.8475%2014.5725L19.9185%2012.942C19.8675%2012.8985%2019.8195%2012.8505%2019.776%2012.7995C19.332%2012.279%2019.3965%2011.5005%2019.9185%2011.058L21.8475%209.4275C22.0395%209.2655%2022.113%209.0045%2022.0365%208.766C21.579%207.3545%2020.823%206.06%2019.8285%204.962C19.7085%204.83%2019.5405%204.758%2019.368%204.758C19.2975%204.758%2019.227%204.77%2019.1595%204.794L16.779%205.6415C16.716%205.664%2016.65%205.682%2016.584%205.694C16.509%205.7075%2016.434%205.715%2016.3605%205.715C15.7725%205.715%2015.2505%205.298%2015.141%204.701L14.6865%202.223C14.6415%201.977%2014.451%201.782%2014.205%201.7295C13.485%201.5765%2012.7485%201.5%2012.0015%201.5C11.2545%201.5%2010.5165%201.578%209.79652%201.7295C9.55052%201.782%209.36002%201.977%209.31502%202.223L8.86202%204.701C8.85002%204.767%208.83202%204.8315%208.80952%204.8945C8.62802%205.4%208.15102%205.715%207.64102%205.715C7.50302%205.715%207.36202%205.691%207.22402%205.643L4.84352%204.7955C4.77602%204.7715%204.70402%204.7595%204.63502%204.7595C4.46252%204.7595%204.29452%204.8315%204.17452%204.9635C3.17852%206.0615%202.42402%207.356%201.96502%208.7675C1.88702%209.006%201.96202%209.267%202.15402%209.429L4.08302%2011.0595C4.13402%2011.103%204.18202%2011.151%204.22552%2011.202C4.66952%2011.7225%204.60502%2012.501%204.08302%2012.9435L2.15402%2014.574C1.96202%2014.736%201.88852%2014.997%201.96502%2015.2355C2.42252%2016.647%203.17852%2017.9415%204.17452%2019.0395C4.29452%2019.1715%204.46252%2019.2435%204.63502%2019.2435C4.70552%2019.2435%204.77602%2019.2315%204.84352%2019.2075L7.22402%2018.36C7.28702%2018.3375%207.35302%2018.3195%207.41902%2018.3075C7.49402%2018.294%207.56902%2018.288%207.64252%2018.288C8.23052%2018.288%208.75252%2018.705%208.86202%2019.302L9.31502%2021.78C9.36002%2022.026%209.55052%2022.221%209.79652%2022.2735C10.5165%2022.4265%2011.2545%2022.503%2012.0015%2022.503C12.7485%2022.503%2013.4865%2022.425%2014.205%2022.2735C14.451%2022.221%2014.6415%2022.026%2014.6865%2021.78L15.141%2019.302C15.153%2019.236%2015.171%2019.1715%2015.1935%2019.1085C15.375%2018.603%2015.852%2018.288%2016.362%2018.288C16.5%2018.288%2016.641%2018.312%2016.779%2018.36L19.158%2019.2075C19.227%2019.2315%2019.2975%2019.2435%2019.3665%2019.2435C19.539%2019.2435%2019.707%2019.1715%2019.827%2019.0395C20.823%2017.9415%2021.5775%2016.647%2022.035%2015.2355C22.113%2014.997%2022.038%2014.736%2021.846%2014.574L21.8475%2014.5725ZM19.092%2017.589L17.2815%2016.944C16.9845%2016.839%2016.6755%2016.785%2016.362%2016.785C15.2085%2016.785%2014.1705%2017.514%2013.782%2018.5985C13.731%2018.738%2013.6935%2018.882%2013.6665%2019.029L13.3215%2020.9055C12.8865%2020.9685%2012.444%2021%2012.0015%2021C11.559%2021%2011.1165%2020.9685%2010.68%2020.904L10.3365%2019.0275C10.098%2017.727%208.96552%2016.7835%207.64252%2016.7835C7.48052%2016.7835%207.31552%2016.7985%207.14902%2016.8285C7.00352%2016.8555%206.86102%2016.893%206.72002%2016.9425L4.90952%2017.5875C4.35752%2016.896%203.91652%2016.1385%203.59102%2015.321L5.05202%2014.0865C5.61152%2013.614%205.95202%2012.951%206.01202%2012.222C6.07202%2011.493%205.84252%2010.785%205.36702%2010.227C5.27102%2010.1145%205.16452%2010.008%205.05202%209.912L3.59102%208.6775C3.91652%207.86%204.35752%207.101%204.90952%206.411L6.72002%207.056C7.01702%207.161%207.32602%207.215%207.64102%207.215C8.79452%207.215%209.83252%206.486%2010.221%205.4015C10.272%205.2605%2010.3095%205.1165%2010.3365%204.971L10.68%203.0945C11.1165%203.0315%2011.559%202.9985%2012.0015%202.9985C12.444%202.9985%2012.8865%203.03%2013.3215%203.093L13.665%204.9695C13.9035%206.27%2015.036%207.2135%2016.359%207.2135C16.521%207.2135%2016.686%207.1985%2016.851%207.1685C16.9965%207.1415%2017.1405%207.104%2017.2815%207.0545L19.092%206.4095C19.644%207.0995%2020.085%207.8585%2020.4105%208.676L18.951%209.9105C18.3915%2010.383%2018.0495%2011.046%2017.991%2011.775C17.931%2012.504%2018.1605%2013.2135%2018.636%2013.77C18.7335%2013.884%2018.8385%2013.989%2018.9525%2014.085L20.4135%2015.3195C20.088%2016.137%2019.647%2016.896%2019.095%2017.586L19.092%2017.589Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.globe { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M8%201C4.141%201%201%204.141%201%208C1%2011.859%204.141%2015%208%2015C11.859%2015%2015%2011.859%2015%208C15%204.141%2011.859%201%208%201ZM8%2014C7.422%2014%206.686%2012.906%206.288%2011H9.713C9.315%2012.906%208.579%2014%208.001%2014H8ZM6.121%2010C6.044%209.392%206%208.723%206%208C6%207.277%206.044%206.608%206.121%206H9.878C9.955%206.608%209.999%207.277%209.999%208C9.999%208.723%209.955%209.392%209.878%2010H6.121ZM2%208C2%207.299%202.121%206.626%202.343%206H5.121C5.041%206.656%205%207.332%205%208C5%208.668%205.041%209.344%205.121%2010H2.343C2.121%209.374%202%208.701%202%208ZM8%202C8.578%202%209.314%203.094%209.712%205H6.287C6.685%203.094%207.422%202%208%202ZM10.879%206H13.657C13.879%206.626%2014%207.299%2014%208C14%208.701%2013.879%209.374%2013.657%2010H10.879C10.959%209.344%2011%208.668%2011%208C11%207.332%2010.959%206.656%2010.879%206ZM13.195%205H10.722C10.516%203.938%2010.199%202.98%209.775%202.268C11.228%202.719%2012.446%203.707%2013.195%205ZM6.226%202.268C5.802%202.98%205.484%203.938%205.279%205H2.806C3.556%203.707%204.774%202.718%206.226%202.268ZM2.805%2011H5.278C5.484%2012.062%205.801%2013.02%206.225%2013.732C4.772%2013.281%203.554%2012.293%202.805%2011ZM9.774%2013.732C10.198%2013.02%2010.516%2012.062%2010.721%2011H13.194C12.444%2012.293%2011.226%2013.282%209.774%2013.732Z%22%2F%3E%3C%2Fsvg%3E"); }
+button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
+
+#stage { inset: 0; border-radius: 0; }
+#address-form { position: relative; }
+#address { height: 26px; padding-right: 28px; color: var(--vscode-input-foreground, var(--text)); border-color: var(--vscode-input-border, #333); }
+#share-browser { position: absolute; right: 3px; top: 2px; }
+#share-browser[aria-pressed="true"] { color: var(--vscode-textLink-foreground, #4daafc); background: var(--control-hover); }
+.share-confirmation {
+  position: fixed;
+  z-index: 40;
+  top: 34px;
+  right: 2px;
+  width: min(260px, calc(100vw - 4px));
+  padding: 18px 20px 13px;
+  color: #202124;
+  background: #f1f2f4;
+  border: 1px solid #aeb0b4;
+  border-radius: 25px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.share-confirmation strong { display: block; max-width: 205px; font-size: 14px; line-height: 1.15; }
+.share-confirmation p { margin: 12px 0 13px; }
+.share-remember { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; cursor: pointer; }
+.share-remember input { width: 16px; height: 16px; margin: 0; accent-color: #1473e6; }
+.share-confirmation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.share-confirmation-actions button {
+  height: 31px;
+  color: #202124;
+  background: #e2e3e7;
+  border: 0;
+  border-radius: 18px;
+  font-weight: 600;
+}
+.share-confirmation-actions button:focus-visible { outline: 3px solid #6aa5ff; outline-offset: 1px; }
+#share-allow { color: #fff; background: #0878f9; }
+#add-context { width: 22px; padding: 3px; border-radius: 5px; color: var(--muted); }
+#context-menu-toggle { width: 12px; border: 0; }
+#context-menu-toggle .icon { width: 12px; mask-size: 12px; }
+.codex-actions.selection-active > #add-context { background: var(--vscode-inputOption-activeBackground, #373749); color: var(--text); }
+.codex-actions.selection-active > #context-menu-toggle { background: transparent; }
+.browser-more { position: relative; }
+.toolbar { border-bottom: 1px solid var(--vscode-editorGroup-border, #282828); }
+.draft { position: absolute; z-index: 15; display: flex; align-items: center; gap: 4px; width: min(320px, calc(100% - 8px)); padding: 4px; background: var(--vscode-editorWidget-background, #252526); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px var(--shadow); }
+#annotation { flex: 1; min-width: 0; height: 28px; min-height: 28px; max-height: 100px; resize: none; padding: 4px 8px; color: var(--text); background: var(--vscode-input-background, #202020); border: 1px solid var(--vscode-input-border, #454545); border-radius: 5px; outline: none; line-height: 18px; }
+#annotation:focus { border-color: #3794b4; outline: 1px solid #3794b466; outline-offset: 2px; }
+#annotation::placeholder { color: var(--vscode-input-placeholderForeground, #777); }
+#save-draft { width: 24px; height: 26px; flex-shrink: 0; }
+.element-label { position: absolute; z-index: 14; max-width: calc(100% - 8px); padding: 2px 6px; border-radius: 2px 2px 0 0; background: #287d9f; color: white; font-size: 11px; line-height: 16px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+.hover-marker, .draft-region { stroke: #3794b4; stroke-width: 1; fill: #3794b414; }
+#stage.inspecting #frame { filter: brightness(.68); }
+.icon.copy { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M3%205V12.73C2.4%2012.38%202%2011.74%202%2011V5C2%202.79%203.79%201%206%201H9C9.74%201%2010.38%201.4%2010.73%202H6C4.35%202%203%203.35%203%205ZM11%2015H6C4.897%2015%204%2014.103%204%2013V5C4%203.897%204.897%203%206%203H11C12.103%203%2013%203.897%2013%205V13C13%2014.103%2012.103%2015%2011%2015ZM12%205C12%204.448%2011.552%204%2011%204H6C5.448%204%205%204.448%205%205V13C5%2013.552%205.448%2014%206%2014H11C11.552%2014%2012%2013.552%2012%2013V5Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.add { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M8%201.5C8%201.22386%207.77614%201%207.5%201C7.22386%201%207%201.22386%207%201.5V7H1.5C1.22386%207%201%207.22386%201%207.5C1%207.77614%201.22386%208%201.5%208H7V13.5C7%2013.7761%207.22386%2014%207.5%2014C7.77614%2014%208%2013.7761%208%2013.5V8H13.5C13.7761%208%2014%207.77614%2014%207.5C14%207.22386%2013.7761%207%2013.5%207H8V1.5Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.ellipsis { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M5%208C5%208.55229%204.55228%209%204%209C3.44772%209%203%208.55229%203%208C3%207.44772%203.44772%207%204%207C4.55228%207%205%207.44772%205%208ZM9%208C9%208.55229%208.55229%209%208%209C7.44772%209%207%208.55229%207%208C7%207.44772%207.44772%207%208%207C8.55229%207%209%207.44772%209%208ZM12%209C12.5523%209%2013%208.55229%2013%208C13%207.44772%2012.5523%207%2012%207C11.4477%207%2011%207.44772%2011%208C11%208.55229%2011.4477%209%2012%209Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.comment-discussion { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M14.56%207.44049C14.28%207.16049%2013.9%207.00049%2013.5%207.00049H13V4.00049C13%202.90049%2012.1%202.00049%2011%202.00049H3C1.9%202.00049%201%202.90049%201%204.00049V9.00049C1%2010.1005%201.9%2011.0005%203%2011.0005V12.0005C3%2012.8205%203.93%2013.2905%204.59%2012.8105L7%2011.0505V11.5005C7%2011.9005%207.16%2012.2805%207.44%2012.5605C7.72%2012.8405%208.1%2013.0005%208.5%2013.0005H10.29L12.15%2014.8505C12.19%2014.9005%2012.25%2014.9405%2012.31%2014.9605C12.37%2014.9905%2012.43%2015.0005%2012.5%2015.0005C12.57%2015.0005%2012.63%2014.9905%2012.69%2014.9605C12.78%2014.9205%2012.86%2014.8605%2012.92%2014.7805C12.97%2014.7005%2013%2014.6005%2013%2014.5005V13.0005H13.5C13.9%2013.0005%2014.28%2012.8405%2014.56%2012.5605C14.84%2012.2805%2015%2011.9005%2015%2011.5005V8.50049C15%208.10049%2014.84%207.72049%2014.56%207.44049ZM6.75%2010.0005L4%2012.0005V10.0005H3C2.45%2010.0005%202%209.55049%202%209.00049V4.00049C2%203.45049%202.45%203.00049%203%203.00049H11C11.55%203.00049%2012%203.45049%2012%204.00049V7.00049H8.5C8.1%207.00049%207.72%207.16049%207.44%207.44049C7.16%207.72049%207%208.10049%207%208.50049V10.0005H6.75ZM14%2011.5005C14%2011.6305%2013.95%2011.7605%2013.85%2011.8505C13.76%2011.9505%2013.63%2012.0005%2013.5%2012.0005H12.5C12.37%2012.0005%2012.24%2012.0505%2012.15%2012.1505C12.05%2012.2405%2012%2012.3705%2012%2012.5005V13.2905L10.85%2012.1505C10.81%2012.1005%2010.75%2012.0605%2010.69%2012.0405C10.63%2012.0105%2010.57%2012.0005%2010.5%2012.0005H8.5C8.37%2012.0005%208.24%2011.9505%208.15%2011.8505C8.05%2011.7605%208%2011.6305%208%2011.5005V8.50049C8%208.37049%208.05%208.24049%208.15%208.15049C8.24%208.05049%208.37%208.00049%208.5%208.00049H13.5C13.63%208.00049%2013.76%208.05049%2013.85%208.15049C13.95%208.24049%2014%208.37049%2014%208.50049V11.5005Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.tools { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M9.6%201.2a4%204%200%200%200-4.5%205.9L1.4%2010.8a1.6%201.6%200%200%200%202.3%202.3l3.7-3.7a4%204%200%200%200%205.9-4.5l-2.4%202.4-2.2-.6-.6-2.2%202.4-2.4-.9-.9ZM2.1%2012.4a.6.6%200%201%201%20.9-.9.6.6%200%200%201-.9.9Z%22%2F%3E%3C%2Fsvg%3E"); }
+.icon.screenshot-area { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22currentColor%22%3E%3Cpath%20d%3D%22M2%202h4v1H3v3H2V2Zm8%200h4v4h-1V3h-3V2ZM2%2010h1v3h3v1H2v-4Zm11%200h1v4h-4v-1h3v-3ZM5%205h6v6H5V5Zm1%201v4h4V6H6Z%22%2F%3E%3C%2Fsvg%3E"); }
+
+/* Match the reference dropdown while retaining the active VS Code theme. */
+#context-menu { width: 276px; max-width: calc(100vw - 8px); padding: 5px; border-radius: 12px; top: 25px; }
+#context-menu button { position: relative; height: 24px; padding: 0 10px 0 18px; gap: 12px; white-space: nowrap; }
+#context-menu .menu-separator { margin: 5px 10px; }
+#context-menu .shortcut { font-size: 12px; }
+#select-mode[aria-checked="true"]::before { content: '✓'; position: absolute; left: 3px; }
+#stage[data-mode="element"] { cursor: crosshair; }
+#more-menu { top: 25px; width: 242px; max-width: calc(100vw - 8px); max-height: calc(100vh - 38px); overflow-y: auto; padding: 5px; border-radius: 12px; }
+#more-menu button { height: 24px; padding: 0 10px; gap: 12px; white-space: nowrap; }
+#more-menu .menu-separator { margin: 5px 10px; }
+#more-menu .shortcut { font-size: 12px; }
+#devtools-toggle[aria-pressed="true"] { color: var(--text); background: var(--control-hover); }
+#screenshot-menu { top: 25px; width: 276px; max-width: calc(100vw - 8px); padding: 5px; border-radius: 12px; }
+#screenshot-menu button { position: relative; height: 24px; padding: 0 10px 0 18px; gap: 12px; white-space: nowrap; }
+#screenshot-menu .shortcut { font-size: 12px; }
+#area-capture[aria-checked="true"]::before { content: '✓'; position: absolute; left: 3px; }
+.screenshot-chevron { width: 10px; height: 10px; margin-left: -3px; }
+#screenshot-menu-toggle { display: flex; width: 28px; gap: 0; }

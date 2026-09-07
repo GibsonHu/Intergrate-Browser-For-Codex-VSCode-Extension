@@ -1,0 +1,89 @@
+{
+	"name": "Intergrate-Browser-For-Codex",
+	"displayName": "Integrated Browser for Codex",
+	"description": "A VS Code-native browser experience for commenting on pages and attaching the context to Codex.",
+	"version": "0.16.1",
+	"publisher": "drgoldenpants",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.96.0"
+	},
+	"categories": [
+		"Other",
+		"Visualization"
+	],
+	"keywords": [
+		"browser",
+		"codex",
+		"annotation",
+		"playwright"
+	],
+	"activationEvents": [
+		"onCommand:intergrateBrowserForCodex.open"
+	],
+	"main": "./src/extension.js",
+	"extensionKind": [
+		"workspace",
+		"ui"
+	],
+	"contributes": {
+		"commands": [
+			{
+				"command": "intergrateBrowserForCodex.open",
+				"title": "Open Integrated Browser for Codex",
+				"category": "Browser",
+				"icon": "$(globe)"
+			}
+		],
+		"menus": {
+			"commandPalette": [
+				{
+					"command": "intergrateBrowserForCodex.open"
+				}
+			]
+		},
+		"configuration": {
+			"title": "Integrated Browser for Codex",
+			"properties": {
+				"intergrateBrowserForCodex.homepage": {
+					"type": "string",
+					"default": "http://localhost:3000",
+					"description": "Page opened when the browser starts."
+				},
+				"intergrateBrowserForCodex.refreshInterval": {
+					"type": "number",
+					"default": 700,
+					"minimum": 250,
+					"maximum": 5000,
+					"description": "Milliseconds between visual change checks."
+				},
+				"intergrateBrowserForCodex.chromeExecutable": {
+					"type": "string",
+					"default": "",
+					"description": "Optional Chrome/Chromium executable. Common system paths are detected automatically."
+				},
+				"intergrateBrowserForCodex.ignoreHttpsErrors": {
+					"type": "boolean",
+					"default": true,
+					"description": "Allow local development servers with self-signed certificates."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"check": "node --check src/extension.js && node --check media/browser.js",
+		"test": "node --test test/*.test.js",
+		"package": "npx @vscode/vsce package"
+	},
+	"dependencies": {
+		"playwright-core": "^1.55.0"
+	},
+	"devDependencies": {
+		"@vscode/vsce": "^3.6.0"
+	},
+	"__metadata": {
+		"installedTimestamp": 1788740817689,
+		"targetPlatform": "undefined",
+		"size": 8076784
+	}
+}

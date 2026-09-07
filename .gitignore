@@ -1,0 +1,6 @@
+node_modules/
+*.vsix
+.vsixmanifest
+.codex-browser/
+.intergrate-browser-for-codex/
+npm-debug.log*

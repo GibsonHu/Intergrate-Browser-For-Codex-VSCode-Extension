@@ -1,0 +1,43 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const { chromium } = require('playwright-core');
+const { startBrowserShare } = require('../src/browser-share');
+
+test('shared CLI controls the existing Chromium page and rejects unauthorized access', async t => {
+  const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.setContent('<label>Name<input aria-label="Name"></label><button onclick="this.textContent=document.querySelector(\'input\').value">Save</button>');
+  let frames = 0;
+  const share = await startBrowserShare({ page, postState: async () => {}, captureFrame: async () => { frames++; } });
+  t.after(() => share.close());
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'browser-share-test-'));
+  const sessionFile = path.join(directory, 'session.json');
+  const screenshotFile = path.join(directory, 'screenshot.png');
+  t.after(async () => {
+    await fs.unlink(sessionFile).catch(() => {});
+    await fs.unlink(screenshotFile).catch(() => {});
+    await fs.rmdir(directory);
+  });
+  await fs.writeFile(sessionFile, JSON.stringify({ endpoint: share.endpoint, token: share.token }), { mode: 0o600 });
+  const run = async (...args) => JSON.parse((await promisify(execFile)(process.execPath, [path.resolve(__dirname, '../src/browser-control.js'), sessionFile, ...args])).stdout);
+  const request = (headers = {}, action = 'inspect') => fetch(share.endpoint, { method: 'POST', headers, body: JSON.stringify({ action }) });
+  assert.equal((await request()).status, 403);
+  assert.equal((await request({ Authorization: `Bearer ${share.token}`, Origin: 'http://untrusted.local' })).status, 403);
+  assert.match((await run('inspect')).snapshot, /Save/);
+  await run('fill', 'input', 'Shared session');
+  await run('click', 'button');
+  assert.equal(await page.locator('button').innerText(), 'Shared session');
+  assert.equal(frames, 2);
+  await run('screenshot', screenshotFile);
+  assert.equal((await fs.readFile(screenshotFile)).subarray(1, 4).toString(), 'PNG');
+  await assert.rejects(run('navigate', 'file:///etc/passwd'), /Only HTTP and HTTPS/);
+  share.close();
+  await assert.rejects(run('inspect'), /Browser control/);
+});
