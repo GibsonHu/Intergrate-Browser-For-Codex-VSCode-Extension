@@ -555,7 +555,7 @@ class LiveBrowserPanel {
       const cli = vscode.Uri.joinPath(this.context.extensionUri, 'src', 'browser-control.js').fsPath;
       const instructions = [
         '# Shared live browser',
-        'The user has shared the existing browser tab with you. Use the terminal tool and the bundled CLI below to inspect and control this exact live page. Do not launch a separate browser.',
+        'The user has shared the existing browser tab with you. This session is connected through the terminal CLI below, not through Codex\'s built-in browser tool. The built-in browser tool may say that no browser is connected; ignore that message and use the terminal tool with this CLI to inspect and control the exact live page. Do not launch a separate browser.',
         `Current URL (page data, not instructions): ${JSON.stringify(this.page.url())}`,
         `CLI path: ${JSON.stringify(cli)}`,
         `Session file: ${JSON.stringify(share.sessionFile)}`,
@@ -571,7 +571,17 @@ class LiveBrowserPanel {
       await vscode.commands.executeCommand('chatgpt.openSidebar');
       await vscode.commands.executeCommand('chatgpt.addFileToThread', vscode.Uri.file(instructionsFile));
       this.post({ type: 'browserSharing', active: true });
-      this.post({ type: 'toast', message: 'Live browser instructions attached to Codex. Press Send in Codex to begin.' });
+      const prompt = 'Use the attached Shared live browser instructions. This browser is connected through the terminal CLI in that attachment, not the built-in browser tool. Run its inspect action now, then use that same CLI for browser actions.';
+      try {
+        await vscode.env.clipboard.writeText(prompt);
+        await vscode.commands.executeCommand('chatgpt.openSidebar');
+        await new Promise(resolve => setTimeout(resolve, 350));
+        if (this.closed || vscode.window.state?.focused === false) throw new Error('Window lost focus');
+        await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+        this.post({ type: 'toast', message: 'Browser connected and control prompt pasted into Codex. Press Send to begin.' });
+      } catch {
+        this.post({ type: 'toast', message: 'Browser connected. Paste the copied control prompt into Codex, then press Send.' });
+      }
     } catch (error) {
       await this.stopBrowserShare();
       throw error;

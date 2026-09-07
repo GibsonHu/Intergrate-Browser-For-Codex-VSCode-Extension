@@ -2,7 +2,7 @@
 
 ## Share the live browser with Codex
 
-Click **Share Browser with Codex** at the right of the address bar. This attaches live-session instructions to the current Codex composer. Press Send there to let Codex inspect the page and use the bundled terminal CLI to navigate, click, fill fields, press keys, scroll, and save screenshots in the same visible tab. Copy Address is now in More Actions.
+Click **Share Browser with Codex** at the right of the address bar. This attaches live-session instructions and pastes a control prompt into the current Codex composer. Press Send there to let Codex inspect the page and use the bundled terminal CLI to navigate, click, fill fields, press keys, scroll, and save screenshots in the same visible tab. Copy Address is now in More Actions. This connection is separate from Codex's built-in browser tool; the pasted prompt tells Codex to use the attached CLI if that tool reports that no browser is connected.
 
 The button highlights while sharing; click it again to stop. Closing the tab also revokes the connection. An action already in progress may finish. The control connection listens only on localhost and requires a random session credential stored in a private local file. Codex needs terminal access on the extension host and access to localhost (including the necessary sandbox permissions); this does not register native MCP tools or control a browser on another machine. Session instructions remain as chat attachments, but the credential file is removed when sharing stops.
 

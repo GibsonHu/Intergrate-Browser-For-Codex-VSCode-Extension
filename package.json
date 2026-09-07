@@ -2,7 +2,7 @@
 	"name": "Intergrate-Browser-For-Codex",
 	"displayName": "Integrated Browser for Codex",
 	"description": "A VS Code-native browser experience for commenting on pages and attaching the context to Codex.",
-	"version": "0.16.1",
+	"version": "0.16.2",
 	"publisher": "drgoldenpants",
 	"license": "MIT",
 	"engines": {
