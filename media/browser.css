@@ -165,9 +165,10 @@ button:focus-visible { outline: 1px solid var(--focus); outline-offset: -1px; }
 
 #stage { inset: 0; border-radius: 0; }
 #address-form { position: relative; }
-#address { height: 26px; padding-right: 28px; color: var(--vscode-input-foreground, var(--text)); border-color: var(--vscode-input-border, #333); }
-#share-browser { position: absolute; right: 3px; top: 2px; }
+#address { height: 26px; padding-right: 32px; color: var(--vscode-input-foreground, var(--text)); border-color: var(--vscode-input-border, #333); }
+#share-browser { position: absolute; right: 3px; top: 2px; width: 26px; color: var(--text); background: var(--vscode-button-secondaryBackground, #2b2b2b); border: 1px solid var(--border); }
 #share-browser[aria-pressed="true"] { color: var(--vscode-textLink-foreground, #4daafc); background: var(--control-hover); }
+.icon.share-browser-icon { --icon: url("data:image/svg+xml,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M4.5%205V3.5A1.5%201.5%200%200%201%206%202h6.5A1.5%201.5%200%200%201%2014%203.5v5A1.5%201.5%200%200%201%2012.5%2010h-1%22%20stroke%3D%22white%22%20stroke-linecap%3D%22round%22%2F%3E%3Crect%20x%3D%221.5%22%20y%3D%225%22%20width%3D%2210%22%20height%3D%228.5%22%20rx%3D%221.5%22%20stroke%3D%22white%22%2F%3E%3C%2Fsvg%3E"); }
 .share-confirmation {
   position: fixed;
   z-index: 40;

@@ -694,7 +694,7 @@ class LiveBrowserPanel {
       <button id="forward" class="icon-button" title="Forward (Alt+Right)" aria-label="Forward" disabled><span class="icon arrow-right" aria-hidden="true"></span></button>
       <button id="reload" class="icon-button" title="Reload" aria-label="Reload"><span class="icon refresh" aria-hidden="true"></span></button>
     </div>
-    <form id="address-form"><input id="address" autocomplete="off" spellcheck="false" aria-label="Address" placeholder="Enter a URL or search"><button id="share-browser" type="button" class="icon-button" title="Share Browser with Codex" aria-label="Share Browser with Codex" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false"><span class="icon comment-discussion" aria-hidden="true"></span></button></form>
+    <form id="address-form"><input id="address" autocomplete="off" spellcheck="false" aria-label="Address" placeholder="Enter a URL or search"><button id="share-browser" type="button" class="icon-button" title="Share Browser with Codex" aria-label="Share Browser with Codex" aria-pressed="false" aria-haspopup="dialog" aria-expanded="false"><span class="icon share-browser-icon" aria-hidden="true"></span></button></form>
     <div id="codex-actions" class="codex-actions" role="group" aria-label="Add browser context to Codex">
       <button id="add-context" title="Comment on Element" aria-label="Comment on Element" aria-pressed="false"><span class="icon comment" aria-hidden="true"></span></button>
       <button id="context-menu-toggle" title="More browser context actions" aria-haspopup="menu" aria-expanded="false" aria-label="More browser context actions"><span class="icon chevron-down" aria-hidden="true"></span></button>
