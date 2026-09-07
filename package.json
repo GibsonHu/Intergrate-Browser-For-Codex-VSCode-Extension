@@ -1,6 +1,6 @@
 {
-	"name": "browser-coms-for-codex",
-	"displayName": "Browser Coms for Codex",
+	"name": "browser-annotator-for-codex",
+	"displayName": "Browser Annotator for Codex",
 	"description": "A VS Code-native browser experience for commenting on pages and attaching the context to Codex.",
 	"version": "1.0.3",
 	"publisher": "drgoldenpants",
@@ -19,7 +19,7 @@
 		"playwright"
 	],
 	"activationEvents": [
-		"onCommand:browser-coms-for-codex.open"
+		"onCommand:browser-annotator-for-codex.open"
 	],
 	"main": "./src/extension.js",
 	"extensionKind": [
@@ -29,8 +29,8 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "browser-coms-for-codex.open",
-				"title": "Browser Coms for Codex",
+				"command": "browser-annotator-for-codex.open",
+				"title": "Browser Annotator for Codex",
 				"category": "Browser",
 				"icon": "media/icons/codex-browser.png"
 			}
@@ -38,44 +38,44 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "browser-coms-for-codex.open"
+					"command": "browser-annotator-for-codex.open"
 				}
 			],
 			"editor/title": [
 				{
-					"command": "browser-coms-for-codex.open",
+					"command": "browser-annotator-for-codex.open",
 					"group": "navigation@100"
 				}
 			]
 		},
 		"configuration": {
-			"title": "Browser Coms for Codex",
+			"title": "Browser Annotator for Codex",
 			"properties": {
-				"browser-coms-for-codex.homepage": {
+				"browser-annotator-for-codex.homepage": {
 					"type": "string",
 					"default": "http://localhost:3000",
 					"description": "Home suggestion shown when the browser has no recent pages."
 				},
-				"browser-coms-for-codex.refreshInterval": {
+				"browser-annotator-for-codex.refreshInterval": {
 					"type": "number",
 					"default": 1000,
 					"minimum": 500,
 					"maximum": 5000,
 					"description": "Milliseconds between background visual change checks. Browser interactions still refresh immediately."
 				},
-				"browser-coms-for-codex.renderScale": {
+				"browser-annotator-for-codex.renderScale": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
 					"maximum": 4,
 					"description": "Browser pixel density. 0 automatically matches the VS Code display; use 1–4 to override it."
 				},
-				"browser-coms-for-codex.chromeExecutable": {
+				"browser-annotator-for-codex.chromeExecutable": {
 					"type": "string",
 					"default": "",
 					"description": "Optional Chrome/Chromium executable. Common system paths are detected automatically."
 				},
-				"browser-coms-for-codex.ignoreHttpsErrors": {
+				"browser-annotator-for-codex.ignoreHttpsErrors": {
 					"type": "boolean",
 					"default": true,
 					"description": "Allow local development servers with self-signed certificates."

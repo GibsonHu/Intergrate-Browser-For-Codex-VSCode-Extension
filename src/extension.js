@@ -12,7 +12,7 @@ const browserPanels = new Set();
 const temporaryCaptureDirectories = new Set();
 
 function launcherItems(context, activePanel) {
-  const configuredHomepage = vscode.workspace.getConfiguration('browser-coms-for-codex').get('homepage', 'http://localhost:3000');
+  const configuredHomepage = vscode.workspace.getConfiguration('browser-annotator-for-codex').get('homepage', 'http://localhost:3000');
   const stored = context.globalState.get('recentPages', []);
   const recents = (Array.isArray(stored) ? stored : []).slice(0, 8);
   if (recents.length === 0 && configuredHomepage) recents.push({ title: 'Home', url: configuredHomepage });
@@ -24,7 +24,7 @@ function launcherItems(context, activePanel) {
 }
 
 function activate(context) {
-  context.subscriptions.push(vscode.commands.registerCommand('browser-coms-for-codex.open', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('browser-annotator-for-codex.open', async () => {
     if (currentPanel) {
       currentPanel.reveal();
       return;
@@ -77,7 +77,7 @@ class LiveBrowserPanel {
     this.pageTitle = '';
 
     this.panel = vscode.window.createWebviewPanel(
-      'browser-coms-for-codex',
+      'browser-annotator-for-codex',
       'Browser',
       vscode.ViewColumn.One,
       {
@@ -102,26 +102,26 @@ class LiveBrowserPanel {
     try {
       const { chromium } = require('playwright-core');
       const configured = expandExecutablePath(
-        vscode.workspace.getConfiguration('browser-coms-for-codex').get('chromeExecutable', ''),
+        vscode.workspace.getConfiguration('browser-annotator-for-codex').get('chromeExecutable', ''),
         process.platform,
         process.env,
         os.homedir()
       );
       const executablePath = configured || await findChrome();
       if (!executablePath) {
-        throw new Error('Chrome/Chromium was not found. Set browser-coms-for-codex.chromeExecutable in Settings.');
+        throw new Error('Chrome/Chromium was not found. Set browser-annotator-for-codex.chromeExecutable in Settings.');
       }
       this.browser = await chromium.launch({
         headless: true,
         executablePath,
         args: process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []
       });
-      const configuredScale = Number(vscode.workspace.getConfiguration('browser-coms-for-codex').get('renderScale', 0));
+      const configuredScale = Number(vscode.workspace.getConfiguration('browser-annotator-for-codex').get('renderScale', 0));
       this.configuredScale = configuredScale > 0 ? clamp(configuredScale, 1, 4) : 0;
       const browserContext = await this.browser.newContext({
         viewport: this.viewport,
         deviceScaleFactor: this.configuredScale || this.displayScale,
-        ignoreHTTPSErrors: vscode.workspace.getConfiguration('browser-coms-for-codex').get('ignoreHttpsErrors', true)
+        ignoreHTTPSErrors: vscode.workspace.getConfiguration('browser-annotator-for-codex').get('ignoreHttpsErrors', true)
       });
       this.browserContext = browserContext;
       this.page = await browserContext.newPage();
@@ -141,7 +141,7 @@ class LiveBrowserPanel {
       });
       this.page.on('crash', () => this.post({ type: 'error', message: 'The browser page crashed. Reload it to continue.' }));
 
-      const interval = clamp(vscode.workspace.getConfiguration('browser-coms-for-codex').get('refreshInterval', 1000), 500, 5000);
+      const interval = clamp(vscode.workspace.getConfiguration('browser-annotator-for-codex').get('refreshInterval', 1000), 500, 5000);
       this.timer = setInterval(() => this.captureFrame(false), interval);
       this.post({ type: 'startPage', ...launcherItems(this.context, this) });
       this.post({ type: 'ready' });
@@ -198,7 +198,7 @@ class LiveBrowserPanel {
         case 'stop': if (this.cdp) await this.cdp.send('Page.stopLoading'); break;
         case 'copyUrl': if (this.page) { await vscode.env.clipboard.writeText(this.page.url()); this.post({ type: 'toast', message: 'Address copied' }); } break;
         case 'external': if (this.page && /^https?:/.test(this.page.url())) await vscode.env.openExternal(vscode.Uri.parse(this.page.url())); break;
-        case 'settings': await vscode.commands.executeCommand('workbench.action.openSettings', 'browser-coms-for-codex'); break;
+        case 'settings': await vscode.commands.executeCommand('workbench.action.openSettings', 'browser-annotator-for-codex'); break;
         case 'newTab': await openBrowserPanel(this.context, true); break;
         case 'zoom': await this.setZoom(message.action); break;
         case 'findInPage': await this.findInPage(); break;
@@ -620,7 +620,7 @@ class LiveBrowserPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <link rel="stylesheet" href="${style}">
-  <title>Browser Coms for Codex</title>
+  <title>Browser Annotator for Codex</title>
 </head>
 <body>
   <header class="toolbar">
