@@ -2,9 +2,21 @@
 
 ## Share the live browser with Codex
 
-Click **Share Browser with Codex** at the right of the address bar. This attaches live-session instructions and pastes a control prompt into the current Codex composer. Press Send there to let Codex inspect the page and use the bundled terminal CLI to navigate, click, fill fields, press keys, scroll, and save screenshots in the same visible tab. Copy Address is now in More Actions. This connection is separate from Codex's built-in browser tool; the pasted prompt tells Codex to use the attached CLI if that tool reports that no browser is connected.
+Version 0.17.0 exposes the live tab through an MCP server named `integrated_browser`. Click **Share Browser with Codex** at the right of the address bar and select Allow. This attaches the tab ID and pastes a prompt into the current Codex composer. Press Send to start. Codex can discover the tab, inspect its DOM/accessibility tree, see screenshots, and use selectors or screenshot coordinates to click, type, scroll, drag, navigate, and reload. Actions happen in the same visible tab. Copy Address is in More Actions.
 
-The button highlights while sharing; click it again to stop. Closing the tab also revokes the connection. An action already in progress may finish. The control connection listens only on localhost and requires a random session credential stored in a private local file. Codex needs terminal access on the extension host and access to localhost (including the necessary sandbox permissions); this does not register native MCP tools or control a browser on another machine. Session instructions remain as chat attachments, but the credential file is removed when sharing stops.
+The button highlights while sharing; click it again to stop. Closing the tab also revokes the connection. An action already in progress may finish. The MCP process discovers only explicitly shared tabs via private session files and authenticated localhost connections. Credentials never appear in tool results or chat attachments. Codex and the MCP process must run on the same host as the extension (the remote machine for Remote SSH). This is a custom browser MCP integration, not the built-in Codex browser provider.
+
+### One-time MCP setup
+
+Use Node.js 20 or newer. Register the bundled server with Codex, replacing the path with the actual extension installation directory (or this source checkout after `npm install`):
+
+```sh
+codex mcp add integrated_browser -- node /absolute/path/to/extension/src/browser-mcp.js
+```
+
+Use an absolute Node executable path if your default Node is older. Restart the Codex session after adding the server so its tools load. The server may start before any tab is shared; `browser_tabs` will then return an empty list. After sharing, the tab becomes discoverable without restarting the server. If upgrading removes the old installation directory, re-register using the new path.
+
+The tools are `browser_tabs`, `browser_dom`, `browser_inspect`, `browser_screenshot`, `browser_navigate`, `browser_reload`, `browser_click`, `browser_click_xy`, `browser_fill`, `browser_type`, `browser_press`, `browser_scroll`, and `browser_drag`. Each page tool requires the explicit `tabId` returned by discovery or the share attachment. Screenshots are returned as MCP images. Coordinates use CSS pixels in that screenshot; device scale is 1. DOM inspection is limited to 500 visible main-document elements and 30,000 characters of page text. Use screenshots and coordinate actions for canvas, shadow DOM, and iframe content. Codex performs the observe/action/verify loop when you send a browser task; sharing alone does not submit a task or start an independent agent.
 
 An integrated browser tab styled around VS Code's native browser experience. It can comment on live DOM elements, capture page regions, and attach the result to the current Codex thread.
 
