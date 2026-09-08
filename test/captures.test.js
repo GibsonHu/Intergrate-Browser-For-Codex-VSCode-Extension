@@ -7,13 +7,14 @@ const os = require('node:os');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 
-function harness(availableCommands = ['claude-vscode.insertAtMention', 'claude-vscode.focus']) {
-  const writes = new Map(), commands = [], clips = [], posts = [], mouseMoves = [], mouseWheels = [], shownDocuments = [];
+function harness(availableCommands = ['claude-vscode.focus']) {
+  const writes = new Map(), commands = [], clips = [], posts = [], mouseMoves = [], mouseWheels = [], shownDocuments = [], hiddenDocuments = [];
   const vscode = {
     env: { clipboard: { writeText: async text => commands.push(['clipboard.writeText', text]) } },
     Uri: { file: value => value, joinPath: (base, ...parts) => path.join(base, ...parts) },
     workspace: {
       workspaceFolders: [{ uri: { scheme: 'file', fsPath: '/workspace', toString: () => '/workspace' } }],
+      asRelativePath: uri => path.relative('/workspace', String(uri)),
       openTextDocument: async uri => ({ uri }),
       fs: { createDirectory: async () => {}, writeFile: async (uri, bytes) => writes.set(uri, bytes) }
     },
@@ -22,7 +23,10 @@ function harness(availableCommands = ['claude-vscode.insertAtMention', 'claude-v
       state: { focused: true },
       showInformationMessage() {},
       showWarningMessage() {},
-      showTextDocument: async document => { shownDocuments.push(document.uri); }
+      showTextDocument: async document => {
+        shownDocuments.push(document.uri);
+        return { hide: () => hiddenDocuments.push(document.uri) };
+      }
     }
   };
   vscode.Uri.joinPath = (base, ...parts) => path.join(String(base), ...parts);
@@ -38,7 +42,7 @@ function harness(availableCommands = ['claude-vscode.insertAtMention', 'claude-v
       wheel: async (dx, dy) => mouseWheels.push([dx, dy])
     }
   } });
-  return { panel, writes, commands, clips, posts, mouseMoves, mouseWheels, shownDocuments, vscode };
+  return { panel, writes, commands, clips, posts, mouseMoves, mouseWheels, shownDocuments, hiddenDocuments, vscode };
 }
 
 test('wheel input moves Chromium cursor to the hovered point before scrolling', async () => {
@@ -60,15 +64,16 @@ test('scrollbar input sets the document scroll position and refreshes the frame'
   assert.equal(captures, 1);
 });
 
-test('comment is pasted verbatim after an @-mentioned context file and Claude focus', async () => {
-  const { panel, commands, shownDocuments } = harness();
+test('comment and capture references are pasted after Claude focus without opening editors', async () => {
+  const { panel, commands, shownDocuments, hiddenDocuments } = harness();
   await panel.sendCaptures([{ kind: 'element', annotation: 'what is this?\nExplain it.', element: { tag: 'DIV', rect: { x: 0, y: 0, width: 10, height: 10 } } }]);
   const names = commands.map(([name]) => name);
-  assert.deepEqual(names, ['claude-vscode.insertAtMention', 'claude-vscode.focus',
-    'clipboard.writeText', 'claude-vscode.focus', 'editor.action.clipboardPasteAction']);
-  assert.equal(shownDocuments.length, 1);
-  assert.match(shownDocuments[0], /\.md$/);
-  assert.equal(commands[2][1], 'what is this?\nExplain it.');
+  assert.deepEqual(names, ['claude-vscode.focus', 'clipboard.writeText',
+    'claude-vscode.focus', 'editor.action.clipboardPasteAction']);
+  assert.equal(shownDocuments.length, 0);
+  assert.deepEqual(hiddenDocuments, shownDocuments);
+  assert.match(commands[1][1], /^what is this\?\nExplain it\./);
+  assert.match(commands[1][1], /@\.claude-browser-captures\/.+\.md/);
 });
 
 test('paste failure retries three times before showing the fallback message', async () => {
@@ -78,7 +83,7 @@ test('paste failure retries three times before showing the fallback message', as
     if (args[0] === 'editor.action.clipboardPasteAction') throw new Error('Paste unavailable');
   };
   await panel.onMessage({ type: 'sendCapture', capture: { id: 'paste-failure', kind: 'screenshot', annotation: 'Explain this' } });
-  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 1);
+  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 0);
   assert.equal(commands.filter(([name]) => name === 'editor.action.clipboardPasteAction').length, 3);
   assert(posts.some(post => post.type === 'captureResult' && post.success));
   assert(posts.some(post => /automatic paste failed/.test(post.message || '')));
@@ -116,10 +121,10 @@ test('viewport screenshot includes PNG and Markdown, while annotated element att
   const markdown = [...writes.entries()].find(([name]) => name.endsWith('.md'))[1].toString();
   assert.match(markdown, /Remove this/);
   assert.match(markdown, /\.badge/);
-  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 2);
+  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 0);
 });
 
-test('area screenshot attaches PNG and Markdown and pastes only the exact comment', async () => {
+test('area screenshot includes PNG and Markdown references after the exact comment', async () => {
   const { panel, writes, commands } = harness();
   await panel.onMessage({ type: 'sendCapture', capture: {
     kind: 'region', annotation: 'Make this panel more compact', region: { x: 8, y: 12, width: 160, height: 90 }
@@ -131,8 +136,11 @@ test('area screenshot attaches PNG and Markdown and pastes only the exact commen
   assert.match(markdown, /Viewport region: x=8, y=12, width=160, height=90/);
   assert.match(markdown, /!\[Captured browser context\]\(.+\.png\)/);
   assert.match(markdown, /implement it, and test the result/);
-  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 1);
-  assert.equal(commands.find(([name]) => name === 'clipboard.writeText')[1], 'Make this panel more compact');
+  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 0);
+  const pasted = commands.find(([name]) => name === 'clipboard.writeText')[1];
+  assert.match(pasted, /^Make this panel more compact/);
+  assert.match(pasted, /@\.claude-browser-captures\/.+\.md/);
+  assert.match(pasted, /@\.claude-browser-captures\/.+\.png/);
 });
 
 test('drawing capture attaches the supplied markup PNG and Markdown context', async () => {
@@ -149,7 +157,7 @@ test('drawing capture attaches the supplied markup PNG and Markdown context', as
   assert.match(markdown, /Kind: drawing/);
   assert.match(markdown, /!\[Captured browser context\]\(.+\.png\)/);
   assert.equal(clips.length, 0);
-  assert.equal(commands.find(([name]) => name === 'clipboard.writeText')[1], 'Use this marked area');
+  assert.match(commands.find(([name]) => name === 'clipboard.writeText')[1], /^Use this marked area/);
 });
 
 test('full screenshot attaches PNG and Markdown and adds a brief URL prompt', async () => {
@@ -158,8 +166,8 @@ test('full screenshot attaches PNG and Markdown and adds a brief URL prompt', as
   assert.equal(writes.size, 2);
   assert([...writes.keys()].some(name => name.endsWith('.png')));
   assert([...writes.keys()].some(name => name.endsWith('.md')));
-  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 1);
-  assert.equal(commands.find(([name]) => name === 'clipboard.writeText')[1], 'Browser screenshot: http://localhost:2333/');
+  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 0);
+  assert.match(commands.find(([name]) => name === 'clipboard.writeText')[1], /^Browser screenshot: http:\/\/localhost:2333\//);
 });
 
 
@@ -195,15 +203,13 @@ test('attachment exceptions are acknowledged so the UI can restore the draft', a
 });
 
 test('comment capture never starts a new Claude conversation', async () => {
-  const { panel, writes, commands, posts } = harness([
-    'claude-vscode.insertAtMention', 'claude-vscode.focus', 'claude-vscode.newConversation'
-  ]);
+  const { panel, writes, commands, posts } = harness(['claude-vscode.focus', 'claude-vscode.newConversation']);
   await panel.onMessage({ type: 'sendCapture', capture: {
     id: 'attach-me', kind: 'element', annotation: 'Make this button blue',
     element: { tag: 'BUTTON', selector: '#save', rect: { x: 20, y: 20, width: 80, height: 30 } }
   } });
   assert.equal(writes.size, 1);
-  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 1);
+  assert.equal(commands.filter(([name]) => name === 'claude-vscode.insertAtMention').length, 0);
   assert.equal(commands.some(([name]) => name === 'claude-vscode.newConversation'), false);
   assert(posts.some(message => message.type === 'captureResult' && message.id === 'attach-me' && message.success));
 });

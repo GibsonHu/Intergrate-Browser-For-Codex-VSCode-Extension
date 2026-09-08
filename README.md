@@ -32,13 +32,13 @@ You need:
 1. Interact with the page normally.
 2. Select the comment button, screenshot-area button, or pencil button.
 3. Select or mark the relevant UI and enter your comment.
-4. Press Enter or select **+**. The extension adds generated context files to the current Claude Code composer using `@` mentions and pastes your comment for review. You remain in control of submitting it.
+4. Press Enter or select **+**. The extension pastes your comment and workspace-relative `@` references for the generated context files into the current Claude Code composer. You remain in control of submitting it.
 
 Generated captures are stored temporarily under `.claude-browser-captures` in the open workspace so Claude Code can resolve them. The session directory is removed when its browser panel closes.
 
 ## Notes
 
-- The integration uses Claude Code's supported `claude-vscode.insertAtMention` and `claude-vscode.focus` commands.
+- The integration focuses Claude Code with `claude-vscode.focus` and pastes the capture references directly, so it does not open temporary editor tabs.
 - Browser context goes to Claude Code in the same VS Code window; it is never submitted automatically.
 - In Remote SSH, WSL, Dev Containers, and Codespaces, Chrome or Chromium must be installed in the remote environment.
 - If Claude Code is unavailable, the context is copied to the clipboard instead.

@@ -3,4 +3,5 @@ node_modules/
 .vsixmanifest
 .codex-browser/
 .intergrate-browser-for-codex/
+.claude-browser-captures/
 npm-debug.log*

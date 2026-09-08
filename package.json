@@ -2,7 +2,7 @@
 	"name": "claude-code-browser-annotator",
 	"displayName": "Claude Code Browser Annotator",
 	"description": "A VS Code-native browser experience for commenting on pages and sending the context to Claude Code.",
-	"version": "1.0.7",
+	"version": "1.0.9",
 	"publisher": "drgoldenpants",
 	"icon": "media/icons/claude-code-browser.png",
 	"license": "MIT",

@@ -550,8 +550,7 @@ class LiveBrowserPanel {
   async sendCaptures(captures) {
     if (!this.page || captures.length === 0) return;
     const commands = await vscode.commands.getCommands(true);
-    const canSendToClaude = commands.includes('claude-vscode.insertAtMention')
-      && commands.includes('claude-vscode.focus');
+    const canSendToClaude = commands.includes('claude-vscode.focus');
     const workspaceFolder = (vscode.workspace.workspaceFolders || []).find(folder => folder.uri.scheme === 'file');
     if (!workspaceFolder) {
       const combined = captures.map(capture => fallbackCaptureText(capture)).join('\n\n---\n\n');
@@ -588,25 +587,29 @@ class LiveBrowserPanel {
           : await this.page.screenshot({ type: 'png', clip: clipForCapture(capture, this.viewport), animations: 'disabled' });
         await vscode.workspace.fs.writeFile(imageUri, image);
       }
-      // Claude Code's supported extension command inserts an @-mention for the
-      // active text editor. The Markdown points to any accompanying PNG.
+      // Keep machine-readable context alongside visual captures. Their
+      // workspace-relative paths are pasted into Claude without opening editors.
       if (capture.kind === 'element' || imageName) {
         const markdownUri = vscode.Uri.joinPath(storage, `${baseName}.md`);
         await vscode.workspace.fs.writeFile(markdownUri, Buffer.from(describeCapture(capture, imageName), 'utf8'));
         contextFiles.push(markdownUri);
       }
+      if (imageName) contextFiles.push(imageUri);
     }
 
     if (canSendToClaude) {
-      for (const uri of contextFiles) {
-        const document = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
-        await vscode.commands.executeCommand('claude-vscode.insertAtMention');
-      }
       await vscode.commands.executeCommand('claude-vscode.focus');
       const prompt = captures.map(capture => capturePrompt(capture)).filter(Boolean).join('\n\n');
-      if (prompt) {
-        await vscode.env.clipboard.writeText(prompt);
+      const references = contextFiles.map(uri => {
+        const relativePath = vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/');
+        return `@${relativePath}`;
+      });
+      const contextPrompt = references.length
+        ? `Use the browser context in:\n${references.map(reference => `- ${reference}`).join('\n')}`
+        : '';
+      const composerText = [prompt, contextPrompt].filter(Boolean).join('\n\n');
+      if (composerText) {
+        await vscode.env.clipboard.writeText(composerText);
         let pasted = false;
         for (let attempt = 0; attempt < 3 && !pasted; attempt += 1) {
           try {
