@@ -1,10 +1,15 @@
 {
-	"name": "browser-annotator-for-codex",
-	"displayName": "Browser Annotator for Codex",
-	"description": "A VS Code-native browser experience for commenting on pages and attaching the context to Codex.",
-	"version": "1.0.3",
+	"name": "claude-code-browser-annotator",
+	"displayName": "Claude Code Browser Annotator",
+	"description": "A VS Code-native browser experience for commenting on pages and sending the context to Claude Code.",
+	"version": "1.0.7",
 	"publisher": "drgoldenpants",
+	"icon": "media/icons/claude-code-browser.png",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/GibsonHu/ClaudeBrowser.git"
+	},
 	"engines": {
 		"vscode": "^1.96.0"
 	},
@@ -12,14 +17,23 @@
 		"Other",
 		"Visualization"
 	],
+	"files": [
+		"src/**",
+		"docs/**",
+		"media/**",
+		"node_modules/playwright-core/**",
+		"README.md",
+		"LICENSE"
+	],
 	"keywords": [
 		"browser",
-		"codex",
+		"claude",
+		"claude code",
 		"annotation",
 		"playwright"
 	],
 	"activationEvents": [
-		"onCommand:browser-annotator-for-codex.open"
+		"onCommand:claude-code-browser-annotator.open"
 	],
 	"main": "./src/extension.js",
 	"extensionKind": [
@@ -29,53 +43,53 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "browser-annotator-for-codex.open",
-				"title": "Browser Annotator for Codex",
+				"command": "claude-code-browser-annotator.open",
+				"title": "Claude Code Browser Annotator",
 				"category": "Browser",
-				"icon": "media/icons/codex-browser.png"
+				"icon": "media/icons/claude-code-browser.png"
 			}
 		],
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "browser-annotator-for-codex.open"
+					"command": "claude-code-browser-annotator.open"
 				}
 			],
 			"editor/title": [
 				{
-					"command": "browser-annotator-for-codex.open",
+					"command": "claude-code-browser-annotator.open",
 					"group": "navigation@100"
 				}
 			]
 		},
 		"configuration": {
-			"title": "Browser Annotator for Codex",
+			"title": "Claude Code Browser Annotator",
 			"properties": {
-				"browser-annotator-for-codex.homepage": {
+				"claude-code-browser-annotator.homepage": {
 					"type": "string",
 					"default": "http://localhost:3000",
 					"description": "Home suggestion shown when the browser has no recent pages."
 				},
-				"browser-annotator-for-codex.refreshInterval": {
+				"claude-code-browser-annotator.refreshInterval": {
 					"type": "number",
 					"default": 1000,
 					"minimum": 500,
 					"maximum": 5000,
 					"description": "Milliseconds between background visual change checks. Browser interactions still refresh immediately."
 				},
-				"browser-annotator-for-codex.renderScale": {
+				"claude-code-browser-annotator.renderScale": {
 					"type": "number",
 					"default": 0,
 					"minimum": 0,
 					"maximum": 4,
 					"description": "Browser pixel density. 0 automatically matches the VS Code display; use 1–4 to override it."
 				},
-				"browser-annotator-for-codex.chromeExecutable": {
+				"claude-code-browser-annotator.chromeExecutable": {
 					"type": "string",
 					"default": "",
 					"description": "Optional Chrome/Chromium executable. Common system paths are detected automatically."
 				},
-				"browser-annotator-for-codex.ignoreHttpsErrors": {
+				"claude-code-browser-annotator.ignoreHttpsErrors": {
 					"type": "boolean",
 					"default": true,
 					"description": "Allow local development servers with self-signed certificates."

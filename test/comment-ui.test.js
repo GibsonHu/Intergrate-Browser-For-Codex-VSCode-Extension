@@ -38,6 +38,51 @@ test('address bar has no browser sharing control and Copy Address remains availa
   await page.getByRole('menuitem', { name: 'Copy Address', exact: true }).click();
   assert.equal(await page.evaluate(() => messages.filter(m => m.type === 'copyUrl').length), 1);
 });
+test('browser fills the webview and shows page scroll position', async t => {
+  const page = await setup(t);
+  assert.deepEqual(await page.locator('body').evaluate(element => {
+    const style = getComputedStyle(element);
+    return { margin: style.margin, padding: style.padding };
+  }), { margin: '0px', padding: '0px' });
+  await page.evaluate(() => window.postMessage({
+    type: 'frame', width: 800, height: 600, url: 'http://fixture.local/',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    scroll: { top: 600, viewport: 600, total: 2400 }
+  }, '*'));
+  const scrollbar = page.locator('#page-scrollbar');
+  assert.equal(await scrollbar.evaluate(element => element.classList.contains('visible')), true);
+  assert.equal(await scrollbar.evaluate(element => getComputedStyle(element).opacity), '0');
+  await scrollbar.hover();
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('page-scrollbar')).opacity === '1');
+  const thumb = await page.locator('#page-scrollbar-thumb').boundingBox();
+  assert(thumb.height >= 24);
+  assert(thumb.y > 100);
+});
+test('page scrollbar supports track clicks, thumb dragging, and keyboard scrolling', async t => {
+  const page = await setup(t);
+  await page.mouse.move(400, 300);
+  await page.evaluate(() => window.postMessage({
+    type: 'frame', width: 800, height: 600, url: 'http://fixture.local/',
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    scroll: { top: 0, viewport: 600, total: 2400 }
+  }, '*'));
+  const track = await page.locator('#page-scrollbar').boundingBox();
+  await page.mouse.click(track.x + track.width / 2, track.y + track.height * .75);
+  let request = await page.evaluate(() => messages.filter(message => message.type === 'scrollTo').at(-1));
+  assert(request.top > 1200);
+
+  const thumb = await page.locator('#page-scrollbar-thumb').boundingBox();
+  await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(thumb.x + thumb.width / 2, track.y + 20);
+  await page.mouse.up();
+  request = await page.evaluate(() => messages.filter(message => message.type === 'scrollTo').at(-1));
+  assert(request.top < 100);
+
+  await page.locator('#page-scrollbar').press('End');
+  request = await page.evaluate(() => messages.filter(message => message.type === 'scrollTo').at(-1));
+  assert.equal(request.top, 1800);
+});
 test('new browser shows recent pages and open tabs in the address dropdown', async t => {
   const page = await setup(t);
   await page.evaluate(() => window.postMessage({
@@ -138,7 +183,9 @@ test('scroll works while selecting; leaving viewport clears the hover',async t=>
   await page.mouse.move(10,10); await page.waitForTimeout(20);
   assert.equal(await page.locator('#element-label').count(), 0);
   await page.mouse.move(100,100); await page.mouse.wheel(0,150);
-  assert(await page.evaluate(()=>messages.some(m=>m.type==='wheel')));
+  const wheel = await page.evaluate(()=>messages.findLast(m=>m.type==='wheel'));
+  assert.equal(wheel.x, 100);
+  assert.equal(wheel.dy, 150);
 });
 test('navigation cancels stale drafts and responses',async t=>{
   const page=await setup(t); await pick(page); await page.locator('#annotation').fill('Old page');

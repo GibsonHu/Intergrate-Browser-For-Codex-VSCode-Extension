@@ -12,7 +12,7 @@ const browserPanels = new Set();
 const temporaryCaptureDirectories = new Set();
 
 function launcherItems(context, activePanel) {
-  const configuredHomepage = vscode.workspace.getConfiguration('browser-annotator-for-codex').get('homepage', 'http://localhost:3000');
+  const configuredHomepage = vscode.workspace.getConfiguration('claude-code-browser-annotator').get('homepage', 'http://localhost:3000');
   const stored = context.globalState.get('recentPages', []);
   const recents = (Array.isArray(stored) ? stored : []).slice(0, 8);
   if (recents.length === 0 && configuredHomepage) recents.push({ title: 'Home', url: configuredHomepage });
@@ -24,7 +24,7 @@ function launcherItems(context, activePanel) {
 }
 
 function activate(context) {
-  context.subscriptions.push(vscode.commands.registerCommand('browser-annotator-for-codex.open', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('claude-code-browser-annotator.open', async () => {
     if (currentPanel) {
       currentPanel.reveal();
       return;
@@ -77,7 +77,7 @@ class LiveBrowserPanel {
     this.pageTitle = '';
 
     this.panel = vscode.window.createWebviewPanel(
-      'browser-annotator-for-codex',
+      'claude-code-browser-annotator',
       'Browser',
       vscode.ViewColumn.One,
       {
@@ -86,7 +86,7 @@ class LiveBrowserPanel {
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
       }
     );
-    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icons', 'codex-browser.png');
+    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icons', 'claude-code-browser.png');
     this.panel.webview.html = this.webviewHtml();
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
@@ -102,26 +102,26 @@ class LiveBrowserPanel {
     try {
       const { chromium } = require('playwright-core');
       const configured = expandExecutablePath(
-        vscode.workspace.getConfiguration('browser-annotator-for-codex').get('chromeExecutable', ''),
+        vscode.workspace.getConfiguration('claude-code-browser-annotator').get('chromeExecutable', ''),
         process.platform,
         process.env,
         os.homedir()
       );
       const executablePath = configured || await findChrome();
       if (!executablePath) {
-        throw new Error('Chrome/Chromium was not found. Set browser-annotator-for-codex.chromeExecutable in Settings.');
+        throw new Error('Chrome/Chromium was not found. Set claude-code-browser-annotator.chromeExecutable in Settings.');
       }
       this.browser = await chromium.launch({
         headless: true,
         executablePath,
         args: process.platform === 'linux' ? ['--disable-dev-shm-usage'] : []
       });
-      const configuredScale = Number(vscode.workspace.getConfiguration('browser-annotator-for-codex').get('renderScale', 0));
+      const configuredScale = Number(vscode.workspace.getConfiguration('claude-code-browser-annotator').get('renderScale', 0));
       this.configuredScale = configuredScale > 0 ? clamp(configuredScale, 1, 4) : 0;
       const browserContext = await this.browser.newContext({
         viewport: this.viewport,
         deviceScaleFactor: this.configuredScale || this.displayScale,
-        ignoreHTTPSErrors: vscode.workspace.getConfiguration('browser-annotator-for-codex').get('ignoreHttpsErrors', true)
+        ignoreHTTPSErrors: vscode.workspace.getConfiguration('claude-code-browser-annotator').get('ignoreHttpsErrors', true)
       });
       this.browserContext = browserContext;
       this.page = await browserContext.newPage();
@@ -141,7 +141,7 @@ class LiveBrowserPanel {
       });
       this.page.on('crash', () => this.post({ type: 'error', message: 'The browser page crashed. Reload it to continue.' }));
 
-      const interval = clamp(vscode.workspace.getConfiguration('browser-annotator-for-codex').get('refreshInterval', 1000), 500, 5000);
+      const interval = clamp(vscode.workspace.getConfiguration('claude-code-browser-annotator').get('refreshInterval', 1000), 500, 5000);
       this.timer = setInterval(() => this.captureFrame(false), interval);
       this.post({ type: 'startPage', ...launcherItems(this.context, this) });
       this.post({ type: 'ready' });
@@ -198,7 +198,7 @@ class LiveBrowserPanel {
         case 'stop': if (this.cdp) await this.cdp.send('Page.stopLoading'); break;
         case 'copyUrl': if (this.page) { await vscode.env.clipboard.writeText(this.page.url()); this.post({ type: 'toast', message: 'Address copied' }); } break;
         case 'external': if (this.page && /^https?:/.test(this.page.url())) await vscode.env.openExternal(vscode.Uri.parse(this.page.url())); break;
-        case 'settings': await vscode.commands.executeCommand('workbench.action.openSettings', 'browser-annotator-for-codex'); break;
+        case 'settings': await vscode.commands.executeCommand('workbench.action.openSettings', 'claude-code-browser-annotator'); break;
         case 'newTab': await openBrowserPanel(this.context, true); break;
         case 'zoom': await this.setZoom(message.action); break;
         case 'findInPage': await this.findInPage(); break;
@@ -211,7 +211,21 @@ class LiveBrowserPanel {
         case 'click': await this.click(message); break;
         case 'inspect': await this.inspect(message.x, message.y, false, message.requestId); break;
         case 'wheel': {
+          if (!this.page) break;
+          const x = clamp(message.x, 0, this.viewport.width - 1);
+          const y = clamp(message.y, 0, this.viewport.height - 1);
+          await this.page.mouse.move(x, y);
           await this.page.mouse.wheel(message.dx || 0, message.dy || 0);
+          await this.captureFrame(true);
+          break;
+        }
+        case 'scrollTo': {
+          if (!this.page) break;
+          const top = Math.max(0, Number(message.top) || 0);
+          await this.page.evaluate(nextTop => {
+            const scroller = document.scrollingElement || document.documentElement;
+            scroller.scrollTop = nextTop;
+          }, top);
           await this.captureFrame(true);
           break;
         }
@@ -482,7 +496,11 @@ class LiveBrowserPanel {
   async captureFrameOnce(force) {
     const viewport = { ...this.viewport };
     try {
-      const buffer = await this.page.screenshot({ type: 'jpeg', quality: 86, scale: 'device', animations: 'allow' });
+      const [buffer, title, scroll] = await Promise.all([
+        this.page.screenshot({ type: 'jpeg', quality: 86, scale: 'device', animations: 'allow' }),
+        this.page.title().catch(() => ''),
+        this.readScrollState(viewport.height)
+      ]);
       const hash = crypto.createHash('sha1').update(buffer).digest('hex');
       if (force || hash !== this.lastFrameHash) {
         this.lastFrameHash = hash;
@@ -492,12 +510,25 @@ class LiveBrowserPanel {
           width: viewport.width,
           height: viewport.height,
           url: this.page.url(),
-          title: await this.page.title().catch(() => '')
+          title,
+          scroll
         });
       }
     } catch (error) {
       if (!this.closed) this.post({ type: 'error', message: String(error.message || error) });
     }
+  }
+
+  async readScrollState(viewportHeight) {
+    if (!this.page || typeof this.page.evaluate !== 'function') {
+      return { top: 0, viewport: viewportHeight, total: viewportHeight };
+    }
+    return this.page.evaluate(() => {
+      const scroller = document.scrollingElement || document.documentElement;
+      const viewport = Math.max(1, scroller.clientHeight || window.innerHeight || 1);
+      const total = Math.max(viewport, scroller.scrollHeight || 0);
+      return { top: Math.max(0, scroller.scrollTop || 0), viewport, total };
+    }).catch(() => ({ top: 0, viewport: viewportHeight, total: viewportHeight }));
   }
 
   async postState() {
@@ -519,26 +550,28 @@ class LiveBrowserPanel {
   async sendCaptures(captures) {
     if (!this.page || captures.length === 0) return;
     const commands = await vscode.commands.getCommands(true);
-    const canAttach = commands.includes('chatgpt.addFileToThread');
+    const canSendToClaude = commands.includes('claude-vscode.insertAtMention')
+      && commands.includes('claude-vscode.focus');
     const workspaceFolder = (vscode.workspace.workspaceFolders || []).find(folder => folder.uri.scheme === 'file');
     if (!workspaceFolder) {
       const combined = captures.map(capture => fallbackCaptureText(capture)).join('\n\n---\n\n');
       await vscode.env.clipboard.writeText(combined);
       this.post({ type: 'toast', message: 'Open a folder first; context copied to clipboard' });
-      vscode.window.showWarningMessage('Codex can only resolve generated browser captures from an open workspace folder. Context was copied to the clipboard.');
+      vscode.window.showWarningMessage('Claude Code can only resolve generated browser captures from an open workspace folder. Context was copied to the clipboard.');
       return;
     }
 
     if (!this.captureStoragePath) {
       this.captureStoragePath = path.join(
-        os.tmpdir(),
-        `integrated-browser-for-codex-${crypto.randomBytes(8).toString('hex')}`
+        workspaceFolder.uri.fsPath,
+        '.claude-browser-captures',
+        `session-${crypto.randomBytes(8).toString('hex')}`
       );
       temporaryCaptureDirectories.add(this.captureStoragePath);
     }
     const storage = vscode.Uri.file(this.captureStoragePath);
     await vscode.workspace.fs.createDirectory(storage);
-    const created = [];
+    const contextFiles = [];
 
     for (let index = 0; index < captures.length; index += 1) {
       const capture = captures[index];
@@ -555,33 +588,36 @@ class LiveBrowserPanel {
           : await this.page.screenshot({ type: 'png', clip: clipForCapture(capture, this.viewport), animations: 'disabled' });
         await vscode.workspace.fs.writeFile(imageUri, image);
       }
-      // Element captures are readable Markdown context. Area and
-      // viewport captures are intentionally image-only.
-      if (capture.kind === 'element') {
+      // Claude Code's supported extension command inserts an @-mention for the
+      // active text editor. The Markdown points to any accompanying PNG.
+      if (capture.kind === 'element' || imageName) {
         const markdownUri = vscode.Uri.joinPath(storage, `${baseName}.md`);
         await vscode.workspace.fs.writeFile(markdownUri, Buffer.from(describeCapture(capture, imageName), 'utf8'));
-        created.push(markdownUri);
+        contextFiles.push(markdownUri);
       }
-      if (imageName) created.push(imageUri);
     }
 
-    if (canAttach) {
-      await vscode.commands.executeCommand('chatgpt.openSidebar');
-      for (const uri of created) await vscode.commands.executeCommand('chatgpt.addFileToThread', uri);
+    if (canSendToClaude) {
+      for (const uri of contextFiles) {
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false });
+        await vscode.commands.executeCommand('claude-vscode.insertAtMention');
+      }
+      await vscode.commands.executeCommand('claude-vscode.focus');
       const prompt = captures.map(capture => capturePrompt(capture)).filter(Boolean).join('\n\n');
       if (prompt) {
         await vscode.env.clipboard.writeText(prompt);
         let pasted = false;
         for (let attempt = 0; attempt < 3 && !pasted; attempt += 1) {
           try {
-            await vscode.commands.executeCommand('chatgpt.openSidebar');
-            // Webview focus and Codex's composer autofocus happen asynchronously.
+            await vscode.commands.executeCommand('claude-vscode.focus');
+            // Claude's chat surface and composer focus settle asynchronously.
             await new Promise(resolve => setTimeout(resolve, 350));
             if (this.closed || vscode.window.state?.focused === false) throw new Error('Window lost focus');
             await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
             pasted = true;
           } catch {
-            // Focus can race with the Codex webview. Retry without reattaching files.
+            // Focus can race with the Claude webview. Retry without adding duplicate mentions.
           }
         }
         if (!pasted) {
@@ -593,14 +629,14 @@ class LiveBrowserPanel {
       }
       this.post({
         type: 'toast',
-        message: `Added ${captures.length} capture${captures.length === 1 ? '' : 's'} to Codex`
+        message: `Added ${captures.length} capture${captures.length === 1 ? '' : 's'} to Claude Code`
       });
       return true;
     } else {
       const combined = captures.map(capture => fallbackCaptureText(capture)).join('\n\n---\n\n');
       await vscode.env.clipboard.writeText(combined);
-      this.post({ type: 'toast', message: 'Codex is unavailable; context copied to clipboard' });
-      vscode.window.showWarningMessage('Install/enable the OpenAI Codex extension to attach browser context. The context was copied instead.');
+      this.post({ type: 'toast', message: 'Claude Code is unavailable; context copied to clipboard' });
+      vscode.window.showWarningMessage('Install or enable the Anthropic Claude Code extension to send browser context. The context was copied instead.');
     }
   }
 
@@ -620,7 +656,7 @@ class LiveBrowserPanel {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
   <link rel="stylesheet" href="${style}">
-  <title>Browser Annotator for Codex</title>
+  <title>Claude Code Browser Annotator</title>
 </head>
 <body>
   <header class="toolbar">
@@ -630,7 +666,7 @@ class LiveBrowserPanel {
       <button id="reload" class="icon-button" title="Reload" aria-label="Reload"><span class="icon refresh" aria-hidden="true"></span></button>
     </div>
     <form id="address-form"><input id="address" autocomplete="off" spellcheck="false" aria-label="Address" aria-autocomplete="list" aria-controls="address-suggestions" aria-expanded="false" placeholder="Search or enter URL"></form>
-    <div id="codex-actions" class="codex-actions" role="group" aria-label="Add browser context to Codex">
+    <div id="claude-actions" class="claude-actions" role="group" aria-label="Add browser context to Claude Code">
       <button id="add-context" title="Comment on Element" aria-label="Comment on Element" aria-pressed="false"><span class="icon comment" aria-hidden="true"></span></button>
     </div>
     <div class="screenshot-actions">
@@ -665,11 +701,12 @@ class LiveBrowserPanel {
     <section id="stage" tabindex="0" aria-label="Live browser viewport">
       <img id="frame" alt="Live browser page">
       <svg id="overlay" aria-hidden="true"></svg>
+      <div id="page-scrollbar" role="scrollbar" aria-label="Page scroll position" aria-orientation="vertical" tabindex="0"><div id="page-scrollbar-thumb"></div></div>
       <div id="empty"><div class="spinner"></div><p>Starting Chromium…</p></div>
     </section>
     <div id="draft" class="draft hidden" role="group" aria-label="Add a comment to selected element">
-      <textarea id="annotation" rows="1" aria-label="Add a comment" placeholder="Add a comment" title="Enter to add to the current Codex composer; Shift+Enter for a new line; Escape to cancel"></textarea>
-      <button id="save-draft" class="icon-button" title="Add to Current Codex Composer" aria-label="Add to Current Codex Composer"><span class="icon add" aria-hidden="true"></span></button>
+      <textarea id="annotation" rows="1" aria-label="Add a comment" placeholder="Add a comment" title="Enter to add to the current Claude Code composer; Shift+Enter for a new line; Escape to cancel"></textarea>
+      <button id="save-draft" class="icon-button" title="Add to Current Claude Code Composer" aria-label="Add to Current Claude Code Composer"><span class="icon add" aria-hidden="true"></span></button>
     </div>
   </main>
   <span id="capture-count" class="hidden">0</span>
@@ -691,6 +728,7 @@ class LiveBrowserPanel {
       this.captureStoragePath = undefined;
       temporaryCaptureDirectories.delete(storagePath);
       await fs.rm(storagePath, { recursive: true, force: true }).catch(() => {});
+      await fs.rmdir(path.dirname(storagePath)).catch(() => {});
     }
     this.onDispose();
   }
@@ -729,6 +767,7 @@ async function deactivate() {
   await Promise.all([...browserPanels].map(panel => panel.dispose()));
   await Promise.all([...temporaryCaptureDirectories].map(async storagePath => {
     await fs.rm(storagePath, { recursive: true, force: true }).catch(() => {});
+    await fs.rmdir(path.dirname(storagePath)).catch(() => {});
     temporaryCaptureDirectories.delete(storagePath);
   }));
 }

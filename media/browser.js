@@ -9,7 +9,7 @@
   const empty = document.getElementById('empty');
   const draftBox = document.getElementById('draft');
   const annotation = document.getElementById('annotation');
-  const codexActions = document.getElementById('codex-actions');
+  const claudeActions = document.getElementById('claude-actions');
   const addContext = document.getElementById('add-context');
   const toast = document.getElementById('toast');
   const statusText = document.getElementById('status-text');
@@ -17,6 +17,8 @@
   const screenshotPrimary = document.getElementById('screenshot-primary');
   const drawPrimary = document.getElementById('draw-primary');
   const addressSuggestions = document.getElementById('address-suggestions');
+  const pageScrollbar = document.getElementById('page-scrollbar');
+  const pageScrollbarThumb = document.getElementById('page-scrollbar-thumb');
 
   const previous = vscode.getState() || {};
   let mode = previous.mode || 'browse';
@@ -41,6 +43,8 @@
   let startPage = false;
   let launcherData = { recents: [], openTabs: [] };
   let activeSuggestion = -1;
+  let scrollMeta = { top: 0, viewport: 0, total: 0 };
+  let scrollbarDrag = null;
   const reload = document.getElementById("reload");
   const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
   const standardShortcuts = {
@@ -89,7 +93,7 @@
     gesture = null;
     mode = next;
     const commentActive = ['select', 'element'].includes(mode) || draft?.kind === 'element';
-    codexActions.classList.toggle('selection-active', commentActive);
+    claudeActions.classList.toggle('selection-active', commentActive);
     addContext.setAttribute('aria-pressed', String(commentActive));
     screenshotPrimary.setAttribute('aria-pressed', String(mode === 'region' || draft?.kind === 'region'));
     drawPrimary.setAttribute('aria-pressed', String(mode === 'draw' || draft?.kind === 'drawing'));
@@ -140,13 +144,91 @@
     positionSelection();
   }
 
+  function renderScrollbar() {
+    const viewport = Math.max(0, Number(scrollMeta.viewport) || 0);
+    const total = Math.max(viewport, Number(scrollMeta.total) || 0);
+    const trackHeight = pageScrollbar.clientHeight;
+    const scrollable = total > viewport + 1 && trackHeight > 0;
+    pageScrollbar.classList.toggle('visible', scrollable);
+    pageScrollbar.setAttribute('aria-valuemin', '0');
+    pageScrollbar.setAttribute('aria-valuemax', String(Math.max(0, total - viewport)));
+    pageScrollbar.setAttribute('aria-valuenow', String(Math.round(Math.max(0, Number(scrollMeta.top) || 0))));
+    if (!scrollable) return;
+    const thumbHeight = Math.max(24, trackHeight * viewport / total);
+    const maxTop = Math.max(0, trackHeight - thumbHeight);
+    const maxScroll = Math.max(1, total - viewport);
+    const thumbTop = Math.max(0, Math.min(maxTop, (Number(scrollMeta.top) || 0) / maxScroll * maxTop));
+    pageScrollbarThumb.style.height = `${thumbHeight}px`;
+    pageScrollbarThumb.style.transform = `translateY(${thumbTop}px)`;
+  }
+
+  function scrollFromScrollbar(clientY, grabOffset) {
+    const track = pageScrollbar.getBoundingClientRect();
+    const thumbHeight = pageScrollbarThumb.getBoundingClientRect().height;
+    const maxTop = Math.max(0, track.height - thumbHeight);
+    const thumbTop = Math.max(0, Math.min(maxTop, clientY - track.top - grabOffset));
+    const maxScroll = Math.max(0, Number(scrollMeta.total) - Number(scrollMeta.viewport));
+    const top = maxTop > 0 ? thumbTop / maxTop * maxScroll : 0;
+    scrollMeta.top = top;
+    renderScrollbar();
+    post('scrollTo', { top });
+  }
+
+  pageScrollbar.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const thumb = pageScrollbarThumb.getBoundingClientRect();
+    const onThumb = event.clientY >= thumb.top && event.clientY <= thumb.bottom;
+    const grabOffset = onThumb ? event.clientY - thumb.top : thumb.height / 2;
+    scrollbarDrag = { id: event.pointerId, grabOffset };
+    pageScrollbar.classList.add('dragging');
+    pageScrollbar.setPointerCapture(event.pointerId);
+    pageScrollbar.focus();
+    scrollFromScrollbar(event.clientY, grabOffset);
+  });
+
+  pageScrollbar.addEventListener('pointermove', event => {
+    if (!scrollbarDrag || scrollbarDrag.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    scrollFromScrollbar(event.clientY, scrollbarDrag.grabOffset);
+  });
+
+  function finishScrollbarDrag(event) {
+    if (!scrollbarDrag || scrollbarDrag.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    scrollbarDrag = null;
+    pageScrollbar.classList.remove('dragging');
+  }
+  pageScrollbar.addEventListener('pointerup', finishScrollbarDrag);
+  pageScrollbar.addEventListener('pointercancel', finishScrollbarDrag);
+
+  pageScrollbar.addEventListener('keydown', event => {
+    const maxScroll = Math.max(0, Number(scrollMeta.total) - Number(scrollMeta.viewport));
+    const steps = {
+      ArrowUp: -40, ArrowLeft: -40, ArrowDown: 40, ArrowRight: 40,
+      PageUp: -Number(scrollMeta.viewport), PageDown: Number(scrollMeta.viewport),
+      Home: -Infinity, End: Infinity
+    };
+    if (!(event.key in steps)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = steps[event.key];
+    const top = step === Infinity ? maxScroll : step === -Infinity ? 0 : Math.max(0, Math.min(maxScroll, Number(scrollMeta.top) + step));
+    scrollMeta.top = top;
+    renderScrollbar();
+    post('scrollTo', { top });
+  });
+
   function positionSelection() {
     const rect = draft ? (draft.kind === 'element' ? draft.element.rect : draft.region) : ['select', 'element'].includes(mode) ? hoverRect : null;
     const commentActive = ['select', 'element'].includes(mode) || draft?.kind === 'element';
     screenshotPrimary.setAttribute('aria-pressed', String(mode === 'region' || draft?.kind === 'region'));
     drawPrimary.setAttribute('aria-pressed', String(mode === 'draw' || draft?.kind === 'drawing'));
     stage.classList.toggle('inspecting', !!draft);
-    codexActions.classList.toggle('selection-active', commentActive);
+    claudeActions.classList.toggle('selection-active', commentActive);
     addContext.setAttribute('aria-pressed', String(commentActive));
     if (!rect) return;
     const pageBounds = frame.getBoundingClientRect();
@@ -537,9 +619,17 @@
 
   stage.addEventListener('wheel', event => {
     event.preventDefault();
-    if (pendingCapture || draft || drawing) return;
+    if (pendingCapture || drawing) return;
+    if (draft) closeDraft();
     clearHover();
-    post('wheel', { dx: event.deltaX, dy: event.deltaY });
+    const point = pagePoint(event);
+    const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? frameMeta.height : 1;
+    post('wheel', {
+      ...point,
+      dx: event.deltaX * deltaScale,
+      dy: event.deltaY * deltaScale
+    });
   }, { passive: false });
 
   stage.addEventListener('keydown', event => {
@@ -578,11 +668,13 @@
         closeAddressSuggestions();
         hasFrame = true;
         frameMeta = { width: message.width, height: message.height, url: message.url, title: message.title };
+        scrollMeta = message.scroll || { top: 0, viewport: message.height, total: message.height };
         frame.src = `data:image/jpeg;base64,${message.data}`;
         if (document.activeElement !== address) address.value = message.url || address.value;
         empty.classList.add('hidden');
         setStatus('Live', 'live');
         renderOverlay();
+        renderScrollbar();
         break;
       case 'state':
         frameMeta.url = message.url;
@@ -653,6 +745,7 @@
 
   function reportSize() {
     positionSelection();
+    renderScrollbar();
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       const rect = stage.getBoundingClientRect();
